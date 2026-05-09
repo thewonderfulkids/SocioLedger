@@ -22,10 +22,15 @@ const emptyFlatForm = {
 
 const initialData = {
   users: [],
+  societies: [],
   flats: [],
   rateHistory: [],
   payments: [],
   expenses: [],
+  paymentSettings: {
+    upiId: "",
+    qrImage: "",
+  },
 };
 
 const seedUsers = {
@@ -40,6 +45,8 @@ const seedUsers = {
     phone: "8888888888",
     role: roles.MANAGER,
     name: "Manager",
+    password: "123456",
+    societyIds: ["default_society"],
   },
 };
 
@@ -54,6 +61,22 @@ const seedRateHistory = {
     fromMonth: "2026-04",
     amount: 800,
   },
+};
+
+const seedSocieties = {
+  default_society: {
+    id: "default_society",
+    name: "Default Society",
+    address: "",
+    active: true,
+    createdAt: Date.now(),
+  },
+};
+
+const seedPaymentSettings = {
+  upiId: "",
+  qrImage: "",
+  updatedAt: 0,
 };
 
 function normalizePhone(phone = "") {
@@ -79,7 +102,6 @@ function rupee(n) {
 
 function monthRange(start, end) {
   const result = [];
-
   if (!start || !end) return result;
 
   let [sy, sm] = start.split("-").map(Number);
@@ -87,7 +109,6 @@ function monthRange(start, end) {
 
   while (sy < ey || (sy === ey && sm <= em)) {
     result.push(`${sy}-${String(sm).padStart(2, "0")}`);
-
     sm++;
 
     if (sm > 12) {
@@ -154,10 +175,21 @@ function buildLedger(flat, data) {
   }
 
   const flatPayments = data.payments
-    .filter((p) => p.flatId === flat.id)
-    .sort((a, b) => new Date(a.date) - new Date(b.date));
+  .filter((p) => {
+    if (p.flatId !== flat.id) return false;
 
-  let advance = Number(flat.advance || 0);
+    const isOpeningPayment =
+      p.forMonth === "OPENING" ||
+      p.month === "OPENING" ||
+      p.paymentMonth === "OPENING";
+
+    if (isOpeningPayment && Number(flat.openingDue || 0) <= 0) return false;
+
+    return true;
+  })
+  .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  let advance = 0;
 
   for (const payment of flatPayments) {
     let amount = Number(payment.amount || 0);
@@ -186,11 +218,49 @@ function buildLedger(flat, data) {
   };
 }
 
+function getMonthPaymentInfo(flat, data, monthKey) {
+  const ledger = buildLedger(flat, data);
+  const entry = ledger.entries.find((e) => e.month === monthKey);
+
+  const charge = Number(entry?.charge ?? getRateForMonth(data.rateHistory, monthKey) ?? 0);
+
+  const monthPaid = data.payments
+    .filter((p) => {
+      if (p.flatId !== flat.id) return false;
+
+      const forMonth = p.forMonth || p.month || p.paymentMonth || "";
+      if (forMonth) return forMonth === monthKey;
+
+      return String(p.date || "").slice(0, 7) === monthKey;
+    })
+    .reduce((sum, p) => sum + Number(p.amount || 0), 0);
+
+  const availableAdvance = Number(ledger.advance || 0);
+  const paidWithAdvance = Math.min(charge, monthPaid + availableAdvance);
+
+  const paid = paidWithAdvance;
+  const due = Math.max(charge - paidWithAdvance, 0);
+  const netTotalDue = Math.max(Number(ledger.totalDue || 0) - availableAdvance, 0);
+
+  let status = "Pending";
+
+  if (charge <= 0) status = "No Charge";
+  else if (due <= 0) status = "Paid";
+  else if (paid > 0) status = "Partial";
+
+  return {
+    charge,
+    paid,
+    due,
+    status,
+    totalDue: netTotalDue,
+    advance: availableAdvance,
+  };
+}
+
 function downloadCSV(filename, rows) {
   const csv = rows
-    .map((row) =>
-      row.map((cell) => `"${String(cell ?? "").replaceAll('"', '""')}"`).join(",")
-    )
+    .map((row) => row.map((cell) => `"${String(cell ?? "").replaceAll('"', '""')}"`).join(","))
     .join("\n");
 
   const blob = new Blob([csv], {
@@ -218,7 +288,11 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(false);
 
   const [selectedFlatId, setSelectedFlatId] = useState("");
+  const [selectedSocietyId, setSelectedSocietyId] = useState("default_society");
   const [reportMonth, setReportMonth] = useState(getCurrentMonth());
+  const [statusMonth, setStatusMonth] = useState(getCurrentMonth());
+
+  const [payModalFlatId, setPayModalFlatId] = useState("");
 
   const [flatForm, setFlatForm] = useState(emptyFlatForm);
 
@@ -232,6 +306,7 @@ export default function App() {
     amount: "",
     mode: "Cash",
     date: new Date().toISOString().slice(0, 10),
+    forMonth: getCurrentMonth(),
     note: "",
   });
 
@@ -242,19 +317,39 @@ export default function App() {
     note: "",
   });
 
+  const [paymentSettingsForm, setPaymentSettingsForm] = useState({
+    upiId: "",
+    qrImage: "",
+  });
+
+  const [societyForm, setSocietyForm] = useState({
+    id: "",
+    name: "",
+    address: "",
+  });
+
+  const [managerForm, setManagerForm] = useState({
+    id: "",
+    name: "",
+    phone: "",
+    password: "",
+    societyIds: [],
+  });
+
   useEffect(() => {
     const unsubscribe = onValue(ref(db), async (snapshot) => {
       const value = snapshot.val() || {};
 
-      if (!value.users) {
-        await set(ref(db, "users"), seedUsers);
-      }
-
-      if (!value.rateHistory) {
-        await set(ref(db, "rateHistory"), seedRateHistory);
-      }
+      if (!value.users) await set(ref(db, "users"), seedUsers);
+      if (!value.rateHistory) await set(ref(db, "rateHistory"), seedRateHistory);
+      if (!value.paymentSettings) await set(ref(db, "paymentSettings"), seedPaymentSettings);
+      if (!value.societies) await set(ref(db, "societies"), seedSocieties);
 
       const users = normalizeList(value.users || seedUsers);
+      const societies = normalizeList(value.societies || seedSocieties).sort((a, b) =>
+        String(a.name || "").localeCompare(String(b.name || ""))
+      );
+
       const flats = normalizeList(value.flats || [])
         .filter((flat) => flat && flat.id)
         .sort((a, b) =>
@@ -277,10 +372,12 @@ export default function App() {
 
       setData({
         users,
+        societies,
         flats,
         rateHistory,
         payments,
         expenses,
+        paymentSettings: value.paymentSettings || seedPaymentSettings,
       });
 
       setLoading(false);
@@ -288,6 +385,13 @@ export default function App() {
 
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    setPaymentSettingsForm({
+      upiId: data.paymentSettings?.upiId || "",
+      qrImage: data.paymentSettings?.qrImage || "",
+    });
+  }, [data.paymentSettings?.upiId, data.paymentSettings?.qrImage]);
 
   function createFirebaseId(path) {
     return push(ref(db, path)).key;
@@ -301,37 +405,65 @@ export default function App() {
     return user?.role === roles.SUPER_ADMIN;
   }
 
-  const activeFlats = data.flats.filter((flat) => flat.active !== false);
+  function canShowPayButton(flat) {
+    if (user?.role !== roles.RESIDENT) return false;
+    return normalizePhone(flat.phone) === normalizePhone(user.phone);
+  }
+
+  const allowedSocieties =
+    user?.role === roles.SUPER_ADMIN
+      ? data.societies
+      : user?.role === roles.MANAGER
+      ? data.societies.filter((s) => user.societyIds?.includes(s.id))
+      : data.societies.filter((s) => s.id === selectedSocietyId);
+
+  const societyFlats = data.flats.filter((flat) => (flat.societyId || "default_society") === selectedSocietyId);
+  const societyPayments = data.payments.filter((p) => (p.societyId || "default_society") === selectedSocietyId);
+  const societyExpenses = data.expenses.filter((e) => (e.societyId || "default_society") === selectedSocietyId);
+  const societyRates = data.rateHistory.filter((r) => (r.societyId || "default_society") === selectedSocietyId);
+
+  const societyData = {
+    ...data,
+    flats: societyFlats,
+    payments: societyPayments,
+    expenses: societyExpenses,
+    rateHistory: societyRates,
+  };
+
+  const activeFlats = societyData.flats.filter((flat) => flat.active !== false);
 
   const visibleFlats =
     user?.role === roles.RESIDENT
-      ? data.flats.filter((flat) => normalizePhone(flat.phone) === normalizePhone(user.phone))
-      : data.flats;
+      ? societyData.flats.filter((flat) => normalizePhone(flat.phone) === normalizePhone(user.phone))
+      : societyData.flats;
 
   const selectedFlat = useMemo(() => {
     return visibleFlats.find((flat) => flat.id === selectedFlatId) || visibleFlats[0] || null;
   }, [selectedFlatId, visibleFlats]);
+
+  const payModalFlat = useMemo(() => {
+    return societyData.flats.find((flat) => flat.id === payModalFlatId) || null;
+  }, [data.flats, payModalFlatId]);
 
   const dashboard = useMemo(() => {
     let totalDue = 0;
     let totalAdvance = 0;
     let totalCharge = 0;
 
-    data.flats.forEach((flat) => {
-      const ledger = buildLedger(flat, data);
-
+    societyData.flats.forEach((flat) => {
+      const ledger = buildLedger(flat, societyData);
       totalDue += ledger.totalDue;
       totalAdvance += ledger.advance;
       totalCharge += ledger.totalCharge;
     });
 
-    const collection = data.payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
-    const totalExpense = data.expenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+    const collection = societyData.payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+    const totalExpense = societyData.expenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
 
     return {
-      flats: data.flats.length,
+      flats: societyData.flats.length,
       active: activeFlats.length,
-      inactive: data.flats.length - activeFlats.length,
+      inactive: societyData.flats.length - activeFlats.length,
       totalDue,
       totalAdvance,
       totalCharge,
@@ -339,11 +471,11 @@ export default function App() {
       totalExpense,
       netBalance: collection - totalExpense,
     };
-  }, [data, activeFlats.length]);
+  }, [societyData, activeFlats.length]);
 
   const monthlyReport = useMemo(() => {
-    const monthPayments = data.payments.filter((p) => String(p.date || "").startsWith(reportMonth));
-    const monthExpenses = data.expenses.filter((e) => String(e.date || "").startsWith(reportMonth));
+    const monthPayments = societyData.payments.filter((p) => String(p.date || "").startsWith(reportMonth));
+    const monthExpenses = societyData.expenses.filter((e) => String(e.date || "").startsWith(reportMonth));
 
     const collected = monthPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
     const expenses = monthExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
@@ -370,7 +502,26 @@ export default function App() {
       categoryTotals,
       modeTotals,
     };
-  }, [data.payments, data.expenses, reportMonth]);
+  }, [societyData.payments, societyData.expenses, reportMonth]);
+
+  const monthlyStatus = useMemo(() => {
+    const rows = activeFlats.map((flat) => {
+      const info = getMonthPaymentInfo(flat, societyData, statusMonth);
+      return { flat, ...info };
+    });
+
+    return {
+      month: statusMonth,
+      rows,
+      paidCount: rows.filter((r) => r.status === "Paid").length,
+      partialCount: rows.filter((r) => r.status === "Partial").length,
+      pendingCount: rows.filter((r) => r.status === "Pending").length,
+      totalCharge: rows.reduce((sum, r) => sum + Number(r.charge || 0), 0),
+      totalPaid: rows.reduce((sum, r) => sum + Number(r.paid || 0), 0),
+      totalMonthDue: rows.reduce((sum, r) => sum + Number(r.due || 0), 0),
+      totalAllDue: rows.reduce((sum, r) => sum + Number(r.totalDue || 0), 0),
+    };
+  }, [activeFlats, societyData, statusMonth]);
 
   function login() {
     const phone = normalizePhone(loginPhone);
@@ -399,6 +550,11 @@ export default function App() {
       alert("User not found. Resident ka phone flat me add hona chahiye.");
       return;
     }
+    
+    if (foundUser.active === false) {
+      alert("This user is inactive. Please contact Super Admin.");
+      return;
+    }
 
     setUser(foundUser);
     setActiveTab("dashboard");
@@ -409,7 +565,212 @@ export default function App() {
     setLoginPhone("");
     setActiveTab("dashboard");
     setSelectedFlatId("");
+    setPayModalFlatId("");
   }
+  
+  function toggleManagerSociety(societyId) {
+    setManagerForm((prev) => {
+      const exists = prev.societyIds.includes(societyId);
+
+      return {
+        ...prev,
+        societyIds: exists
+          ? prev.societyIds.filter((id) => id !== societyId)
+          : [...prev.societyIds, societyId],
+      };
+    });
+  }
+
+  function editManager(manager) {
+    setManagerForm({
+      id: manager.id,
+      name: manager.name || "",
+      phone: manager.phone || "",
+      password: manager.password || "",
+      societyIds: Array.isArray(manager.societyIds) ? manager.societyIds : Object.values(manager.societyIds || {}),
+    });
+
+    setActiveTab("managers");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function saveManager() {
+    if (!isSuperAdmin()) {
+      alert("Only Super Admin can manage managers.");
+      return;
+    }
+
+    const phone = normalizePhone(managerForm.phone);
+
+    if (!managerForm.name.trim() || phone.length !== 10 || !managerForm.password.trim()) {
+    
+    const password = managerForm.password.trim();
+    
+    const strongPassword =
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@#$%^&*!]).{8,}$/.test(password);
+
+    if (!strongPassword) {
+      alert(
+        "Password strong hona chahiye.\nExample: Abcd@123\n\nMinimum 8 characters with:\n- 1 uppercase\n- 1 lowercase\n- 1 number\n- 1 special character"
+      );
+      return;
+    }
+
+      alert("Manager name, valid phone and password required hai.");
+      return;
+    }
+
+    if (managerForm.societyIds.length === 0) {
+      alert("Manager ko kam se kam 1 society assign karo.");
+      return;
+    }
+
+    const duplicate = data.users.find(
+      (u) => normalizePhone(u.phone) === phone && u.id !== managerForm.id
+    );
+
+    if (duplicate) {
+      alert("Ye mobile number already kisi user/manager ke paas hai.");
+      return;
+    }
+
+    const id = managerForm.id || createFirebaseId("users");
+
+    const payload = {
+      id,
+      name: managerForm.name.trim(),
+      phone,
+      password: managerForm.password.trim(),
+      role: roles.MANAGER,
+      active: true,
+      societyIds: managerForm.societyIds,
+      updatedAt: Date.now(),
+    };
+
+    if (!managerForm.id) {
+      payload.createdAt = Date.now();
+    }
+
+    await update(ref(db, `users/${id}`), payload);
+
+    setManagerForm({
+      id: "",
+      name: "",
+      phone: "",
+      password: "",
+      societyIds: [],
+    });
+
+    alert(managerForm.id ? "Manager updated." : "Manager added.");
+    setActiveTab("dashboard");
+    setTimeout(() => {
+      setActiveTab("managers");
+    }, 50);
+  }
+
+  async function toggleManagerStatus(manager) {
+    if (!isSuperAdmin()) {
+      alert("Only Super Admin can update manager.");
+      return;
+    }
+
+    await update(ref(db, `users/${manager.id}`), {
+      active: manager.active === false ? true : false,
+      updatedAt: Date.now(),
+    });
+  }
+
+async function deleteManager(manager) {
+  if (!isSuperAdmin()) {
+    alert("Only Super Admin can delete manager.");
+    return;
+  }
+
+  const ok = window.confirm(
+    `Manager "${manager.name || manager.phone}" ko permanently delete karna hai?`
+  );
+
+  if (!ok) return;
+
+  await remove(ref(db, `users/${manager.id}`));
+
+  if (managerForm.id === manager.id) {
+    setManagerForm({
+      id: "",
+      name: "",
+      phone: "",
+      password: "",
+      societyIds: [],
+    });
+  }
+
+  alert("Manager deleted.");
+}
+
+async function saveSociety() {
+    if (!isSuperAdmin()) {
+      alert("Only Super Admin can Manage society.");
+      return;
+    }
+
+    if (!societyForm.name.trim()) {
+      alert("Society name required hai.");
+      return;
+    }
+
+    if (societyForm.id) {
+      await update(ref(db, `societies/${societyForm.id}`), {
+        name: societyForm.name.trim(),
+        address: societyForm.address.trim(),
+        updatedAt: Date.now(),
+      });
+
+    alert("Society updated.");
+  } else {
+    const id = createFirebaseId("societies");
+
+    await set(ref(db, `societies/${id}`), {
+      id,
+      name: societyForm.name.trim(),
+      address: societyForm.address.trim(),
+      active: true,
+      createdAt: Date.now(),
+    });
+
+    setSelectedSocietyId(id);
+    alert("Society added.");
+  }
+    setSelectedFlatId("");
+    setSocietyForm({ id: "", name: "", address: "" });
+    setActiveTab("societies");
+  }
+
+  function editSociety(society) {
+    setSocietyForm({
+      id: society.id,
+      name: society.name || "",
+      address: society.address || "",
+    });
+
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+async function toggleSocietyStatus(society) {
+  if (!isSuperAdmin()) {
+    alert("Only Super Admin can update society.");
+    return;
+  }
+
+  if (society.id === "default_society" && society.active !== false) {
+    alert("Default Society ko deactivate mat karo. Pehle another society active rakho.");
+    return;
+  }
+
+  await update(ref(db, `societies/${society.id}`), {
+    active: society.active === false ? true : false,
+    updatedAt: Date.now(),
+  });
+}
 
   async function saveFlat() {
     if (!canManage()) {
@@ -429,11 +790,6 @@ export default function App() {
       return;
     }
 
-    if (data.flats.length >= 50 && !flatForm.id) {
-      alert("Maximum 50 flats allowed.");
-      return;
-    }
-
     const duplicateFlat = data.flats.find(
       (flat) =>
         flat.id !== flatForm.id &&
@@ -446,6 +802,7 @@ export default function App() {
     }
 
     const payload = {
+      societyId: selectedSocietyId,
       flatNo: flatForm.flatNo.trim(),
       ownerName: flatForm.ownerName.trim(),
       phone,
@@ -456,7 +813,6 @@ export default function App() {
       await update(ref(db, `flats/${flatForm.id}`), payload);
     } else {
       const id = createFirebaseId("flats");
-
       await set(ref(db, `flats/${id}`), {
         id,
         ...payload,
@@ -483,13 +839,8 @@ export default function App() {
   }
 
   async function deactivateFlat(id) {
-    if (!canManage()) {
-      alert("You do not have permission.");
-      return;
-    }
-
-    const ok = window.confirm("Is flat ko deactivate karna hai?");
-    if (!ok) return;
+    if (!canManage()) return alert("You do not have permission.");
+    if (!window.confirm("Is flat ko deactivate karna hai?")) return;
 
     await update(ref(db, `flats/${id}`), {
       active: false,
@@ -498,10 +849,7 @@ export default function App() {
   }
 
   async function reactivateFlat(id) {
-    if (!canManage()) {
-      alert("You do not have permission.");
-      return;
-    }
+    if (!canManage()) return alert("You do not have permission.");
 
     await update(ref(db, `flats/${id}`), {
       active: true,
@@ -510,24 +858,15 @@ export default function App() {
   }
 
   async function deleteFlat(id) {
-    if (!isSuperAdmin()) {
-      alert("Only Super Admin can delete flat.");
-      return;
-    }
-
-    const ok = window.confirm("Flat permanently delete karna hai?");
-    if (!ok) return;
+    if (!isSuperAdmin()) return alert("Only Super Admin can delete flat.");
+    if (!window.confirm("Flat permanently delete karna hai?")) return;
 
     await remove(ref(db, `flats/${id}`));
-
     if (selectedFlatId === id) setSelectedFlatId("");
   }
 
   async function saveRate() {
-    if (!canManage()) {
-      alert("You do not have permission.");
-      return;
-    }
+    if (!canManage()) return alert("You do not have permission.");
 
     if (!rateForm.fromMonth || !rateForm.amount) {
       alert("Month aur amount required hai.");
@@ -539,6 +878,7 @@ export default function App() {
 
     await set(ref(db, `rateHistory/${id}`), {
       id,
+      societyId: selectedSocietyId,
       fromMonth: rateForm.fromMonth,
       amount: Number(rateForm.amount),
       updatedAt: Date.now(),
@@ -551,10 +891,7 @@ export default function App() {
   }
 
   async function addPayment() {
-    if (!canManage()) {
-      alert("You do not have permission.");
-      return;
-    }
+    if (!canManage()) return alert("You do not have permission.");
 
     if (!paymentForm.flatId || !paymentForm.amount) {
       alert("Flat aur amount required hai.");
@@ -565,10 +902,12 @@ export default function App() {
 
     await set(ref(db, `payments/${id}`), {
       id,
+      societyId: selectedSocietyId,
       flatId: paymentForm.flatId,
       amount: Number(paymentForm.amount),
       mode: paymentForm.mode,
       date: paymentForm.date,
+      forMonth: paymentForm.forMonth,
       note: paymentForm.note.trim(),
       createdBy: user?.name || "",
       createdAt: Date.now(),
@@ -579,15 +918,13 @@ export default function App() {
       amount: "",
       mode: "Cash",
       date: new Date().toISOString().slice(0, 10),
+      forMonth: getCurrentMonth(),
       note: "",
     });
   }
 
   async function addExpense() {
-    if (!canManage()) {
-      alert("Only Super Admin / Manager can add expense.");
-      return;
-    }
+    if (!canManage()) return alert("Only Super Admin / Manager can add expense.");
 
     if (!expenseForm.amount) {
       alert("Expense amount required hai.");
@@ -598,6 +935,7 @@ export default function App() {
 
     await set(ref(db, `expenses/${id}`), {
       id,
+      societyId: selectedSocietyId,
       amount: Number(expenseForm.amount),
       category: expenseForm.category,
       date: expenseForm.date,
@@ -615,19 +953,68 @@ export default function App() {
   }
 
   async function deleteExpense(id) {
-    if (!isSuperAdmin()) {
-      alert("Only Super Admin can delete expense.");
-      return;
-    }
-
-    const ok = window.confirm("Expense permanently delete karna hai?");
-    if (!ok) return;
+    if (!isSuperAdmin()) return alert("Only Super Admin can delete expense.");
+    if (!window.confirm("Expense permanently delete karna hai?")) return;
 
     await remove(ref(db, `expenses/${id}`));
   }
 
+  function handleQrUpload(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      alert("Only image file upload karo.");
+      return;
+    }
+
+    if (file.size > 900 * 1024) {
+      alert("QR image 900KB se kam rakho. Image compress karke upload karo.");
+      event.target.value = "";
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setPaymentSettingsForm((prev) => ({
+        ...prev,
+        qrImage: reader.result,
+      }));
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function savePaymentSettings() {
+    if (!canManage()) {
+      alert("Only Super Admin / Manager can update payment settings.");
+      return;
+    }
+
+    await set(ref(db, "paymentSettings"), {
+      upiId: paymentSettingsForm.upiId.trim(),
+      qrImage: paymentSettingsForm.qrImage || "",
+      updatedBy: user?.name || "",
+      updatedAt: Date.now(),
+    });
+
+    alert("Payment settings updated.");
+  }
+
+  function copyUpiId() {
+    const upiId = data.paymentSettings?.upiId || "";
+    if (!upiId) {
+      alert("Manager ne UPI ID add nahi ki hai.");
+      return;
+    }
+
+    navigator.clipboard
+      ?.writeText(upiId)
+      .then(() => alert("UPI ID copied."))
+      .catch(() => alert(`UPI ID: ${upiId}`));
+  }
+
   function getWhatsAppLink(flat) {
-    const ledger = buildLedger(flat, data);
+    const ledger = buildLedger(flat, societyData);
 
     const message = encodeURIComponent(
       `SocioLedger Receipt\n\n` +
@@ -667,7 +1054,7 @@ export default function App() {
       ["Payments"],
       ["Date", "Flat", "Amount", "Mode", "Note"],
       ...monthlyReport.payments.map((p) => {
-        const flat = data.flats.find((f) => f.id === p.flatId);
+        const flat = societyData.flats.find((f) => f.id === p.flatId);
         return [p.date, flat?.flatNo || "-", p.amount, p.mode, p.note || "-"];
       }),
       [],
@@ -679,11 +1066,33 @@ export default function App() {
     downloadCSV(`SocioLedger_Report_${monthlyReport.month}.csv`, rows);
   }
 
+  function exportStatusCSV() {
+    const rows = [
+      ["SocioLedger Month-wise Payment Status"],
+      ["Month", formatMonth(monthlyStatus.month)],
+      [],
+      ["Flat", "Resident", "Phone", "Month Charge", "Paid Adjusted", "Month Due", "Total Due", "Advance", "Status"],
+      ...monthlyStatus.rows.map((row) => [
+        row.flat.flatNo,
+        row.flat.ownerName,
+        row.flat.phone,
+        row.charge,
+        row.paid,
+        row.due,
+        row.totalDue,
+        row.advance,
+        row.status,
+      ]),
+    ];
+
+    downloadCSV(`SocioLedger_Payment_Status_${monthlyStatus.month}.csv`, rows);
+  }
+
   if (loading) {
     return (
       <div className="loginPage">
         <div className="loginCard">
-          <img src={logo} alt="SocioLedger Logo" className="loginLogo" />
+          <img src={logo} alt="SocioLedger Logo" className="loginLogoMain" />
           <h1>SocioLedger</h1>
           <p>Loading data from Firebase...</p>
         </div>
@@ -695,7 +1104,7 @@ export default function App() {
     return (
       <div className="loginPage">
         <div className="loginCard">
-          <div className="brandIcon">SL</div>
+          <img src={logo} alt="SocioLedger Logo" className="loginLogoMain" />
 
           <h1>SocioLedger</h1>
           <p>Society maintenance ledger made simple.</p>
@@ -722,12 +1131,29 @@ export default function App() {
     <div className={darkMode ? "app dark" : "app"}>
       <aside className="sidebar">
         <div className="profileBox">
-        <div className="sidebarBrand">
-          <img src={logo} alt="SocioLedger Logo" />
-          <h2>SocioLedger</h2>
-        </div>
+          <div className="sidebarBrand">
+            <img src={logo} alt="SocioLedger Logo" />
+            <h2>SocioLedger</h2>
+          </div>
           <p>{user.name}</p>
           <span className="role">{user.role}</span>
+          {allowedSocieties.length > 0 && (
+            <select
+              className="societySelect"
+              value={selectedSocietyId}
+              onChange={(e) => {
+                setSelectedSocietyId(e.target.value);
+                setSelectedFlatId("");
+                setActiveTab("dashboard");
+              }}
+            >
+              {allowedSocieties.map((society) => (
+                <option key={society.id} value={society.id}>
+                  {society.name}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         <nav className="navButtons">
@@ -751,6 +1177,10 @@ export default function App() {
             </>
           )}
 
+          <button className={activeTab === "status" ? "activeNav" : ""} onClick={() => setActiveTab("status")}>
+            Payment Status
+          </button>
+
           <button className={activeTab === "expenses" ? "activeNav" : ""} onClick={() => setActiveTab("expenses")}>
             Expenses
           </button>
@@ -762,6 +1192,31 @@ export default function App() {
           <button className={activeTab === "ledger" ? "activeNav" : ""} onClick={() => setActiveTab("ledger")}>
             Ledger
           </button>
+
+          {canManage() && (
+            <button className={activeTab === "paymentSetup" ? "activeNav" : ""} onClick={() => setActiveTab("paymentSetup")}>
+              Payment Setup
+            </button>
+          )}
+          
+          {isSuperAdmin() && (
+            <button
+              className={activeTab === "societies" ? "activeNav" : ""}
+              onClick={() => setActiveTab("societies")}
+            >
+              Societies
+            </button>
+          )}
+
+          {isSuperAdmin() && (
+            <button
+              className={activeTab === "managers" ? "activeNav" : ""}
+              onClick={() => setActiveTab("managers")}
+            >
+              Managers
+            </button>
+          )}
+          
         </nav>
 
         <button className="modeBtn" onClick={() => setDarkMode(!darkMode)}>
@@ -774,6 +1229,209 @@ export default function App() {
       </aside>
 
       <main className="main">
+        {activeTab === "managers" && isSuperAdmin() && (
+          <>
+            <div className="pageHeader">
+              <div>
+                <h1>Manager Management</h1>
+                <p>Super Admin yahan se manager add/update karega aur societies assign karega.</p>
+              </div>
+            </div>
+
+            <div className="formGrid">
+              <input
+                placeholder="Manager Name"
+                value={managerForm.name}
+                onChange={(e) => setManagerForm({ ...managerForm, name: e.target.value })}
+              />
+
+              <input
+                placeholder="Mobile Number"
+                value={managerForm.phone}
+                onChange={(e) => setManagerForm({ ...managerForm, phone: e.target.value })}
+                inputMode="numeric"
+              />
+
+              <input
+                type="password"
+                placeholder="Password (example: abcd@123)"
+                value={managerForm.password}
+                onChange={(e) => setManagerForm({ ...managerForm, password: e.target.value })}
+              />
+
+              <button onClick={saveManager}>
+                {managerForm.id ? "Update Manager" : "Add Manager"}
+              </button>
+
+              {managerForm.id && (
+                <button
+                  className="dangerBtn"
+                  onClick={() =>
+                    setManagerForm({
+                      id: "",
+                      name: "",
+                      phone: "",
+                      password: "",
+                      societyIds: [],
+                    })
+                  }
+                >
+                  Cancel Edit
+                </button>
+              )}
+            </div>
+
+            <div className="managerSocietyBox">
+              <h3>Assign Societies</h3>
+
+            <div className="checkboxGrid">
+              {data.societies.map((society) => (
+                <label key={society.id} className="checkItem">
+                  <input
+                    type="checkbox"
+                    checked={managerForm.societyIds.includes(society.id)}
+                    onChange={() => toggleManagerSociety(society.id)}
+                  />
+                  <span>{society.name}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="tableWrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Manager</th>
+                  <th>Phone</th>
+                  <th>Assigned Societies</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {data.users
+                  .filter((u) => u.role === roles.MANAGER)
+                  .map((manager) => {
+                    const assignedIds = Array.isArray(manager.societyIds)
+                      ? manager.societyIds
+                      : Object.values(manager.societyIds || {});
+
+                    const assignedNames = assignedIds
+                      .map((id) => data.societies.find((s) => s.id === id)?.name)
+                      .filter(Boolean)
+                      .join(", ");
+
+                    return (
+                      <tr key={manager.id}>
+                        <td>{manager.name || "-"}</td>
+                        <td>{manager.phone || "-"}</td>
+                        <td>{assignedNames || "-"}</td>
+                        <td>
+                          <span className={manager.active === false ? "status inactive" : "status active"}>
+                            {manager.active === false ? "Inactive" : "Active"}
+                          </span>
+                        </td>
+                        <td>
+                          <button onClick={() => editManager(manager)}>Edit</button>
+
+                          <button
+                            className={manager.active === false ? "" : "dangerBtn"}
+                            onClick={() => toggleManagerStatus(manager)}
+                          >
+                            {manager.active === false ? "Activate" : "Deactivate"}
+                          </button>
+                          <button
+                            className="dangerBtn"
+                            onClick={() => deleteManager(manager)}
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+
+        {activeTab === "societies" && isSuperAdmin() && (
+          <>
+            <div className="pageHeader">
+              <div>
+                <h1>Society Management</h1>
+                <p>Super Admin yahan se new society/building create kar sakta hai.</p>
+              </div>
+            </div>
+
+            <div className="formGrid">
+              <input
+                placeholder="Society / Building Name"
+                value={societyForm.name}
+                onChange={(e) => setSocietyForm({ ...societyForm, name: e.target.value })}
+              />
+
+            <input
+                placeholder="Address"
+                value={societyForm.address}
+                onChange={(e) => setSocietyForm({ ...societyForm, address: e.target.value })}
+              />
+
+              <button onClick={saveSociety}>Add Society
+                {societyForm.id ? "Update Society" : "Add Society"}
+              </button>
+
+              {societyForm.id && (
+              <button
+                className="dangerBtn"
+                onClick={() => setSocietyForm({ id: "", name: "", address: "" })}
+              >
+                Cancel Edit
+              </button>
+            )}
+            </div>
+
+            <div className="tableWrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Society</th>
+                    <th>Address</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {data.societies.map((society) => (
+                    <tr key={society.id}>
+                      <td>{society.name || "-"}</td>
+                      <td>{society.address || "-"}</td>
+                      <td>
+                        <span className={society.active === false ? "status inactive" : "status active"}>
+                          {society.active === false ? "Inactive" : "Active"}
+                        </span>
+                      </td>
+                      <td>
+                        <button onClick={() => editSociety(society)}>Edit</button>
+
+                        <button
+                          className={society.active === false ? "" : "dangerBtn"}
+                          onClick={() => toggleSocietyStatus(society)}
+                        >
+                          {society.active === false ? "Activate" : "Deactivate"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
         {activeTab === "dashboard" && (
           <>
             <div className="pageHeader">
@@ -784,94 +1442,14 @@ export default function App() {
             </div>
 
             <div className="cards">
-              <div className="card">
-                <span>Total Flats</span>
-                <b>{dashboard.flats}</b>
-              </div>
-
-              <div className="card">
-                <span>Active Flats</span>
-                <b>{dashboard.active}</b>
-              </div>
-
-              <div className="card danger">
-                <span>Total Due</span>
-                <b>{rupee(dashboard.totalDue)}</b>
-              </div>
-
-              <div className="card success">
-                <span>Advance</span>
-                <b>{rupee(dashboard.totalAdvance)}</b>
-              </div>
-
-              <div className="card">
-                <span>Total Collection</span>
-                <b>{rupee(dashboard.collection)}</b>
-              </div>
-
-              <div className="card danger">
-                <span>Total Expense</span>
-                <b>{rupee(dashboard.totalExpense)}</b>
-              </div>
-
+              <div className="card"><span>Total Flats</span><b>{dashboard.flats}</b></div>
+              <div className="card"><span>Active Flats</span><b>{dashboard.active}</b></div>
+              <div className="card danger"><span>Total Due</span><b>{rupee(dashboard.totalDue)}</b></div>
+              <div className="card success"><span>Advance</span><b>{rupee(dashboard.totalAdvance)}</b></div>
+              <div className="card"><span>Total Collection</span><b>{rupee(dashboard.collection)}</b></div>
+              <div className="card danger"><span>Total Expense</span><b>{rupee(dashboard.totalExpense)}</b></div>
               <div className={dashboard.netBalance >= 0 ? "card success" : "card danger"}>
-                <span>Net Balance</span>
-                <b>{rupee(dashboard.netBalance)}</b>
-              </div>
-            </div>
-
-            <div className="chartGrid">
-              <div className="chartCard">
-                <h3>Collection vs Due</h3>
-
-                <div className="barRow">
-                  <span>Collected</span>
-
-                  <div className="barTrack">
-                    <div
-                      className="barFill successBar"
-                      style={{
-                        width: `${Math.min(
-                          100,
-                          (dashboard.collection / Math.max(dashboard.collection + dashboard.totalDue, 1)) * 100
-                        )}%`,
-                      }}
-                    />
-                  </div>
-
-                  <b>{rupee(dashboard.collection)}</b>
-                </div>
-
-                <div className="barRow">
-                  <span>Due</span>
-
-                  <div className="barTrack">
-                    <div
-                      className="barFill dangerBar"
-                      style={{
-                        width: `${Math.min(
-                          100,
-                          (dashboard.totalDue / Math.max(dashboard.collection + dashboard.totalDue, 1)) * 100
-                        )}%`,
-                      }}
-                    />
-                  </div>
-
-                  <b>{rupee(dashboard.totalDue)}</b>
-                </div>
-              </div>
-
-              <div className="chartCard">
-                <h3>Building Health</h3>
-
-                <div className="donut">
-                  <div>
-                    <b>{dashboard.active}</b>
-                    <span>Active Flats</span>
-                  </div>
-                </div>
-
-                <p className="centerText">{dashboard.inactive} inactive flats</p>
+                <span>Net Balance</span><b>{rupee(dashboard.netBalance)}</b>
               </div>
             </div>
           </>
@@ -887,92 +1465,43 @@ export default function App() {
             </div>
 
             <div className="formGrid">
-              <input
-                placeholder="Flat No"
-                value={flatForm.flatNo}
-                onChange={(e) => setFlatForm({ ...flatForm, flatNo: e.target.value })}
-              />
-
-              <input
-                placeholder="Owner Name"
-                value={flatForm.ownerName}
-                onChange={(e) => setFlatForm({ ...flatForm, ownerName: e.target.value })}
-              />
-
-              <input
-                placeholder="Mobile"
-                value={flatForm.phone}
-                onChange={(e) => setFlatForm({ ...flatForm, phone: e.target.value })}
-                inputMode="numeric"
-              />
-
-              <input
-                type="number"
-                placeholder="Opening Due"
-                value={flatForm.openingDue}
-                onChange={(e) => setFlatForm({ ...flatForm, openingDue: e.target.value })}
-              />
-
+              <input placeholder="Flat No" value={flatForm.flatNo} onChange={(e) => setFlatForm({ ...flatForm, flatNo: e.target.value })} />
+              <input placeholder="Owner Name" value={flatForm.ownerName} onChange={(e) => setFlatForm({ ...flatForm, ownerName: e.target.value })} />
+              <input placeholder="Mobile" value={flatForm.phone} onChange={(e) => setFlatForm({ ...flatForm, phone: e.target.value })} inputMode="numeric" />
+              <input type="number" placeholder="Opening Due" value={flatForm.openingDue} onChange={(e) => setFlatForm({ ...flatForm, openingDue: e.target.value })} />
               <button onClick={saveFlat}>{flatForm.id ? "Update Flat" : "Add Flat"}</button>
-
-              {flatForm.id && (
-                <button className="dangerBtn" onClick={() => setFlatForm(emptyFlatForm)}>
-                  Cancel Edit
-                </button>
-              )}
+              {flatForm.id && <button className="dangerBtn" onClick={() => setFlatForm(emptyFlatForm)}>Cancel Edit</button>}
             </div>
 
-            {data.flats.length === 0 ? (
-              <EmptyState title="No flats added yet" text="Start by adding your first society flat." />
-            ) : (
-              <div className="tableWrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Flat</th>
-                      <th>Owner</th>
-                      <th>Phone</th>
-                      <th>Opening Due</th>
-                      <th>Status</th>
-                      <th>Action</th>
+            <div className="tableWrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Flat</th><th>Owner</th><th>Phone</th><th>Opening Due</th><th>Status</th><th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {societyData.flats.map((flat) => (
+                    <tr key={flat.id}>
+                      <td>{flat.flatNo || "-"}</td>
+                      <td>{flat.ownerName || "-"}</td>
+                      <td>{flat.phone || "-"}</td>
+                      <td>{rupee(flat.openingDue)}</td>
+                      <td><span className={flat.active === false ? "status inactive" : "status active"}>{flat.active === false ? "Inactive" : "Active"}</span></td>
+                      <td>
+                        <button onClick={() => editFlat(flat)}>Edit</button>
+                        {flat.active === false ? (
+                          <button onClick={() => reactivateFlat(flat.id)}>Activate</button>
+                        ) : (
+                          <button className="dangerBtn" onClick={() => deactivateFlat(flat.id)}>Deactivate</button>
+                        )}
+                        {isSuperAdmin() && <button className="dangerBtn" onClick={() => deleteFlat(flat.id)}>Delete</button>}
+                      </td>
                     </tr>
-                  </thead>
-
-                  <tbody>
-                    {data.flats.map((flat) => (
-                      <tr key={flat.id}>
-                        <td>{flat.flatNo || "-"}</td>
-                        <td>{flat.ownerName || "-"}</td>
-                        <td>{flat.phone || "-"}</td>
-                        <td>{rupee(flat.openingDue)}</td>
-                        <td>
-                          <span className={flat.active === false ? "status inactive" : "status active"}>
-                            {flat.active === false ? "Inactive" : "Active"}
-                          </span>
-                        </td>
-                        <td>
-                          <button onClick={() => editFlat(flat)}>Edit</button>
-
-                          {flat.active === false ? (
-                            <button onClick={() => reactivateFlat(flat.id)}>Activate</button>
-                          ) : (
-                            <button className="dangerBtn" onClick={() => deactivateFlat(flat.id)}>
-                              Deactivate
-                            </button>
-                          )}
-
-                          {isSuperAdmin() && (
-                            <button className="dangerBtn" onClick={() => deleteFlat(flat.id)}>
-                              Delete
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </>
         )}
 
@@ -986,37 +1515,17 @@ export default function App() {
             </div>
 
             <div className="formGrid">
-              <input
-                type="month"
-                value={rateForm.fromMonth}
-                onChange={(e) => setRateForm({ ...rateForm, fromMonth: e.target.value })}
-              />
-
-              <input
-                type="number"
-                placeholder="Maintenance Amount"
-                value={rateForm.amount}
-                onChange={(e) => setRateForm({ ...rateForm, amount: e.target.value })}
-              />
-
+              <input type="month" value={rateForm.fromMonth} onChange={(e) => setRateForm({ ...rateForm, fromMonth: e.target.value })} />
+              <input type="number" placeholder="Maintenance Amount" value={rateForm.amount} onChange={(e) => setRateForm({ ...rateForm, amount: e.target.value })} />
               <button onClick={saveRate}>Add / Update Rate</button>
             </div>
 
             <div className="tableWrap">
               <table>
-                <thead>
-                  <tr>
-                    <th>From Month</th>
-                    <th>Amount</th>
-                  </tr>
-                </thead>
-
+                <thead><tr><th>From Month</th><th>Amount</th></tr></thead>
                 <tbody>
-                  {data.rateHistory.map((rate) => (
-                    <tr key={rate.id}>
-                      <td>{formatMonth(rate.fromMonth)}</td>
-                      <td>{rupee(rate.amount)}</td>
-                    </tr>
+                  {societyData.rateHistory.map((rate) => (
+                    <tr key={rate.id}><td>{formatMonth(rate.fromMonth)}</td><td>{rupee(rate.amount)}</td></tr>
                   ))}
                 </tbody>
               </table>
@@ -1029,27 +1538,19 @@ export default function App() {
             <div className="pageHeader">
               <div>
                 <h1>Payment Entry</h1>
-                <p>Add cash, UPI, bank transfer or cheque payments.</p>
+                <p>Add cash, UPI, bank transfer or cheque payments after verification.</p>
               </div>
             </div>
 
             <div className="formGrid">
               <select value={paymentForm.flatId} onChange={(e) => setPaymentForm({ ...paymentForm, flatId: e.target.value })}>
                 <option value="">Select Flat</option>
-
                 {activeFlats.map((flat) => (
-                  <option key={flat.id} value={flat.id}>
-                    {flat.flatNo} - {flat.ownerName}
-                  </option>
+                  <option key={flat.id} value={flat.id}>{flat.flatNo} - {flat.ownerName}</option>
                 ))}
               </select>
 
-              <input
-                type="number"
-                placeholder="Amount"
-                value={paymentForm.amount}
-                onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
-              />
+              <input type="number" placeholder="Amount" value={paymentForm.amount} onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })} />
 
               <select value={paymentForm.mode} onChange={(e) => setPaymentForm({ ...paymentForm, mode: e.target.value })}>
                 <option>Cash</option>
@@ -1058,54 +1559,87 @@ export default function App() {
                 <option>Cheque</option>
               </select>
 
-              <input
-                type="date"
-                value={paymentForm.date}
-                onChange={(e) => setPaymentForm({ ...paymentForm, date: e.target.value })}
-              />
-
-              <input
-                placeholder="Note"
-                value={paymentForm.note}
-                onChange={(e) => setPaymentForm({ ...paymentForm, note: e.target.value })}
-              />
-
+              <input type="date" value={paymentForm.date} onChange={(e) => setPaymentForm({ ...paymentForm, date: e.target.value })} />
+              <input type="month" value={paymentForm.forMonth} onChange={(e) => setPaymentForm({ ...paymentForm, forMonth: e.target.value })} />
+              <input placeholder="Note" value={paymentForm.note} onChange={(e) => setPaymentForm({ ...paymentForm, note: e.target.value })} />
               <button onClick={addPayment}>Save Payment</button>
             </div>
 
-            {data.payments.length === 0 ? (
-              <EmptyState title="No payments yet" text="Payments will appear here after entry." />
-            ) : (
-              <div className="tableWrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Flat</th>
-                      <th>Amount</th>
-                      <th>Mode</th>
-                      <th>Note</th>
-                    </tr>
-                  </thead>
+            <div className="tableWrap">
+              <table>
+                <thead><tr><th>Date</th><th>Flat</th><th>Amount</th><th>Mode</th><th>Note</th></tr></thead>
+                <tbody>
+                  {societyData.payments.map((payment) => {
+                    const flat = societyData.flats.find((f) => f.id === payment.flatId);
+                    return (
+                      <tr key={payment.id}>
+                        <td>{payment.date}</td><td>{flat?.flatNo || "-"}</td><td>{rupee(payment.amount)}</td><td>{payment.mode}</td><td>{payment.note || "-"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
 
-                  <tbody>
-                    {data.payments.map((payment) => {
-                      const flat = data.flats.find((f) => f.id === payment.flatId);
-
-                      return (
-                        <tr key={payment.id}>
-                          <td>{payment.date}</td>
-                          <td>{flat?.flatNo || "-"}</td>
-                          <td>{rupee(payment.amount)}</td>
-                          <td>{payment.mode}</td>
-                          <td>{payment.note || "-"}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+        {activeTab === "status" && (
+          <>
+            <div className="pageHeader">
+              <div>
+                <h1>Month-wise Payment Status</h1>
+                <p>Har resident dekh sakta hai kisne selected month ka maintenance pay kiya aur kis par kitna due hai.</p>
               </div>
-            )}
+            </div>
+
+            <div className="formGrid">
+              <input type="month" value={statusMonth} onChange={(e) => setStatusMonth(e.target.value)} />
+              {canManage() && <button onClick={exportStatusCSV}>Export Status CSV</button>}
+            </div>
+
+            <div className="cards">
+              <div className="card success"><span>Paid Flats</span><b>{monthlyStatus.paidCount}</b></div>
+              <div className="card warning"><span>Partial Flats</span><b>{monthlyStatus.partialCount}</b></div>
+              <div className="card danger"><span>Pending Flats</span><b>{monthlyStatus.pendingCount}</b></div>
+              <div className="card"><span>Month Collection Adjusted</span><b>{rupee(monthlyStatus.totalPaid)}</b></div>
+              <div className="card danger"><span>Month Due</span><b>{rupee(monthlyStatus.totalMonthDue)}</b></div>
+              <div className="card danger"><span>Total Due</span><b>{rupee(monthlyStatus.totalAllDue)}</b></div>
+            </div>
+
+            <div className="tableWrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Flat</th><th>Resident</th><th>Month Charge</th><th>Paid Adjusted</th><th>Month Due</th><th>Total Due</th><th>Advance</th><th>Status</th><th>Pay</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {monthlyStatus.rows.map((row) => (
+                    <tr key={row.flat.id}>
+                      <td>{row.flat.flatNo || "-"}</td>
+                      <td>{row.flat.ownerName || "-"}</td>
+                      <td>{rupee(row.charge)}</td>
+                      <td>{rupee(row.paid)}</td>
+                      <td>{rupee(row.due)}</td>
+                      <td>{rupee(row.totalDue)}</td>
+                      <td>{rupee(row.advance)}</td>
+                      <td>
+                        <span className={row.status === "Paid" ? "status paid" : row.status === "Partial" ? "status partial" : "status pending"}>
+                          {row.status}
+                        </span>
+                      </td>
+                      <td>
+                        {canShowPayButton(row.flat) && row.totalDue > 0 ? (
+                          <button className="payBtn smallBtn" onClick={() => setPayModalFlatId(row.flat.id)}>Pay</button>
+                        ) : (
+                          <span className="mutedText">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </>
         )}
 
@@ -1120,80 +1654,29 @@ export default function App() {
 
             {canManage() && (
               <div className="formGrid">
-                <input
-                  type="number"
-                  placeholder="Amount"
-                  value={expenseForm.amount}
-                  onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })}
-                />
-
+                <input type="number" placeholder="Amount" value={expenseForm.amount} onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })} />
                 <select value={expenseForm.category} onChange={(e) => setExpenseForm({ ...expenseForm, category: e.target.value })}>
-                  <option>General</option>
-                  <option>Electricity</option>
-                  <option>Water</option>
-                  <option>Lift</option>
-                  <option>Cleaning</option>
-                  <option>Security</option>
-                  <option>Repair</option>
-                  <option>Salary</option>
-                  <option>Other</option>
+                  <option>General</option><option>Electricity</option><option>Water</option><option>Lift</option><option>Cleaning</option><option>Security</option><option>Repair</option><option>Salary</option><option>Other</option>
                 </select>
-
-                <input
-                  type="date"
-                  value={expenseForm.date}
-                  onChange={(e) => setExpenseForm({ ...expenseForm, date: e.target.value })}
-                />
-
-                <input
-                  placeholder="Note / Vendor / Bill details"
-                  value={expenseForm.note}
-                  onChange={(e) => setExpenseForm({ ...expenseForm, note: e.target.value })}
-                />
-
+                <input type="date" value={expenseForm.date} onChange={(e) => setExpenseForm({ ...expenseForm, date: e.target.value })} />
+                <input placeholder="Note / Vendor / Bill details" value={expenseForm.note} onChange={(e) => setExpenseForm({ ...expenseForm, note: e.target.value })} />
                 <button onClick={addExpense}>Add Expense</button>
               </div>
             )}
 
-            {data.expenses.length === 0 ? (
-              <EmptyState title="No expenses yet" text="Expense records will appear here." />
-            ) : (
-              <div className="tableWrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Category</th>
-                      <th>Amount</th>
-                      <th>Note</th>
-                      <th>Added By</th>
-                      <th>Action</th>
+            <div className="tableWrap">
+              <table>
+                <thead><tr><th>Date</th><th>Category</th><th>Amount</th><th>Note</th><th>Added By</th><th>Action</th></tr></thead>
+                <tbody>
+                  {societyData.expenses.map((expense) => (
+                    <tr key={expense.id}>
+                      <td>{expense.date}</td><td>{expense.category}</td><td>{rupee(expense.amount)}</td><td>{expense.note || "-"}</td><td>{expense.createdBy || "-"}</td>
+                      <td>{isSuperAdmin() ? <button className="dangerBtn" onClick={() => deleteExpense(expense.id)}>Delete</button> : "-"}</td>
                     </tr>
-                  </thead>
-
-                  <tbody>
-                    {data.expenses.map((expense) => (
-                      <tr key={expense.id}>
-                        <td>{expense.date}</td>
-                        <td>{expense.category}</td>
-                        <td>{rupee(expense.amount)}</td>
-                        <td>{expense.note || "-"}</td>
-                        <td>{expense.createdBy || "-"}</td>
-                        <td>
-                          {isSuperAdmin() ? (
-                            <button className="dangerBtn" onClick={() => deleteExpense(expense.id)}>
-                              Delete
-                            </button>
-                          ) : (
-                            "-"
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </>
         )}
 
@@ -1208,137 +1691,14 @@ export default function App() {
 
             <div className="formGrid">
               <input type="month" value={reportMonth} onChange={(e) => setReportMonth(e.target.value)} />
-
               <button onClick={exportReportCSV}>Export CSV</button>
-
-              <a href={getWhatsAppSummaryLink()} target="_blank" rel="noreferrer" className="reportLink">
-                WhatsApp Summary
-              </a>
+              <a href={getWhatsAppSummaryLink()} target="_blank" rel="noreferrer" className="reportLink">WhatsApp Summary</a>
             </div>
 
             <div className="cards">
-              <div className="card success">
-                <span>Month Collection</span>
-                <b>{rupee(monthlyReport.collected)}</b>
-              </div>
-
-              <div className="card danger">
-                <span>Month Expense</span>
-                <b>{rupee(monthlyReport.expenseTotal)}</b>
-              </div>
-
-              <div className={monthlyReport.net >= 0 ? "card success" : "card danger"}>
-                <span>Month Net Balance</span>
-                <b>{rupee(monthlyReport.net)}</b>
-              </div>
-            </div>
-
-            <div className="chartGrid">
-              <div className="chartCard">
-                <h3>Payment Mode Summary</h3>
-
-                {Object.keys(monthlyReport.modeTotals).length === 0 && <p>No payments this month.</p>}
-
-                {Object.entries(monthlyReport.modeTotals).map(([mode, amount]) => (
-                  <div className="barRow" key={mode}>
-                    <span>{mode}</span>
-
-                    <div className="barTrack">
-                      <div
-                        className="barFill successBar"
-                        style={{
-                          width: `${Math.min(100, (amount / Math.max(monthlyReport.collected, 1)) * 100)}%`,
-                        }}
-                      />
-                    </div>
-
-                    <b>{rupee(amount)}</b>
-                  </div>
-                ))}
-              </div>
-
-              <div className="chartCard">
-                <h3>Expense Category Summary</h3>
-
-                {Object.keys(monthlyReport.categoryTotals).length === 0 && <p>No expenses this month.</p>}
-
-                {Object.entries(monthlyReport.categoryTotals).map(([cat, amount]) => (
-                  <div className="barRow" key={cat}>
-                    <span>{cat}</span>
-
-                    <div className="barTrack">
-                      <div
-                        className="barFill dangerBar"
-                        style={{
-                          width: `${Math.min(100, (amount / Math.max(monthlyReport.expenseTotal, 1)) * 100)}%`,
-                        }}
-                      />
-                    </div>
-
-                    <b>{rupee(amount)}</b>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <h2>Payments</h2>
-
-            <div className="tableWrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Flat</th>
-                    <th>Amount</th>
-                    <th>Mode</th>
-                    <th>Note</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {monthlyReport.payments.map((p) => {
-                    const flat = data.flats.find((f) => f.id === p.flatId);
-
-                    return (
-                      <tr key={p.id}>
-                        <td>{p.date}</td>
-                        <td>{flat?.flatNo || "-"}</td>
-                        <td>{rupee(p.amount)}</td>
-                        <td>{p.mode}</td>
-                        <td>{p.note || "-"}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <h2>Expenses</h2>
-
-            <div className="tableWrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Category</th>
-                    <th>Amount</th>
-                    <th>Note</th>
-                    <th>Added By</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {monthlyReport.expenses.map((e) => (
-                    <tr key={e.id}>
-                      <td>{e.date}</td>
-                      <td>{e.category}</td>
-                      <td>{rupee(e.amount)}</td>
-                      <td>{e.note || "-"}</td>
-                      <td>{e.createdBy || "-"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="card success"><span>Month Collection</span><b>{rupee(monthlyReport.collected)}</b></div>
+              <div className="card danger"><span>Month Expense</span><b>{rupee(monthlyReport.expenseTotal)}</b></div>
+              <div className={monthlyReport.net >= 0 ? "card success" : "card danger"}><span>Month Net Balance</span><b>{rupee(monthlyReport.net)}</b></div>
             </div>
           </>
         )}
@@ -1354,31 +1714,92 @@ export default function App() {
 
             {visibleFlats.length > 0 ? (
               <>
-                <select
-                  className="flatSelect"
-                  value={selectedFlat?.id || ""}
-                  onChange={(e) => setSelectedFlatId(e.target.value)}
-                >
+                <select className="flatSelect" value={selectedFlat?.id || ""} onChange={(e) => setSelectedFlatId(e.target.value)}>
                   {visibleFlats.map((flat) => (
-                    <option key={flat.id} value={flat.id}>
-                      {flat.flatNo || "-"} - {flat.ownerName || "-"}
-                    </option>
+                    <option key={flat.id} value={flat.id}>{flat.flatNo || "-"} - {flat.ownerName || "-"}</option>
                   ))}
                 </select>
 
-                {selectedFlat && <LedgerView flat={selectedFlat} data={data} whatsappLink={getWhatsAppLink(selectedFlat)} />}
+                {selectedFlat && (
+                  <LedgerView
+                    flat={selectedFlat}
+                    data={societyData}
+                    whatsappLink={getWhatsAppLink(selectedFlat)}
+                    showPayButton={canShowPayButton(selectedFlat)}
+                    onPay={() => setPayModalFlatId(selectedFlat.id)}
+                  />
+                )}
               </>
             ) : (
               <EmptyState title="No ledger found" text="No flat is linked with this account yet." />
             )}
           </>
         )}
+
+        {activeTab === "paymentSetup" && canManage() && (
+          <>
+            <div className="pageHeader">
+              <div>
+                <h1>Payment Setup</h1>
+                <p>Manager ki UPI ID aur QR image yahan se update hogi. Resident ko Pay button par ye hi details dikhenge.</p>
+              </div>
+            </div>
+
+            <div className="settingsGrid">
+              <div className="settingsCard">
+                <h3>UPI Details</h3>
+
+                <label>Manager UPI ID</label>
+                <input placeholder="example@upi" value={paymentSettingsForm.upiId} onChange={(e) => setPaymentSettingsForm({ ...paymentSettingsForm, upiId: e.target.value })} />
+
+                <label>QR Image</label>
+                <input type="file" accept="image/*" onChange={handleQrUpload} />
+
+                <div className="settingsActions">
+                  <button onClick={savePaymentSettings}>Save Payment Settings</button>
+                  {paymentSettingsForm.qrImage && (
+                    <button className="dangerBtn" onClick={() => setPaymentSettingsForm({ ...paymentSettingsForm, qrImage: "" })}>
+                      Remove QR
+                    </button>
+                  )}
+                </div>
+
+                <p className="hintText">QR image 900KB se kam rakho. Payment verification abhi manager ke through manual rahega.</p>
+              </div>
+
+              <div className="settingsCard">
+                <h3>Resident Preview</h3>
+
+                {paymentSettingsForm.qrImage ? (
+                  <img className="qrPreview" src={paymentSettingsForm.qrImage} alt="UPI QR Preview" />
+                ) : (
+                  <div className="qrPlaceholder">QR image not uploaded</div>
+                )}
+
+                <div className="upiPreview">
+                  <span>UPI ID</span>
+                  <b>{paymentSettingsForm.upiId || "Not added"}</b>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {payModalFlat && (
+          <PaymentModal
+            flat={payModalFlat}
+            data={societyData}
+            paymentSettings={data.paymentSettings}
+            onClose={() => setPayModalFlatId("")}
+            onCopyUpi={copyUpiId}
+          />
+        )}
       </main>
     </div>
   );
 }
 
-function LedgerView({ flat, data, whatsappLink }) {
+function LedgerView({ flat, data, whatsappLink, showPayButton, onPay }) {
   const ledger = buildLedger(flat, data);
 
   return (
@@ -1386,44 +1807,24 @@ function LedgerView({ flat, data, whatsappLink }) {
       <div className="ledgerHeader">
         <div>
           <h2>Flat {flat.flatNo}</h2>
-          <p>
-            {flat.ownerName} · {flat.phone}
-          </p>
+          <p>{flat.ownerName} · {flat.phone}</p>
         </div>
 
-        <a href={whatsappLink} target="_blank" rel="noreferrer">
-          WhatsApp Receipt
-        </a>
+        <div className="ledgerActions">
+          {showPayButton && <button className="payBtn" onClick={onPay}>Pay Now</button>}
+          <a href={whatsappLink} target="_blank" rel="noreferrer">WhatsApp Receipt</a>
+        </div>
       </div>
 
       <div className="cards">
-        <div className="card danger">
-          <span>Total Due</span>
-          <b>{rupee(ledger.totalDue)}</b>
-        </div>
-
-        <div className="card success">
-          <span>Advance</span>
-          <b>{rupee(ledger.advance)}</b>
-        </div>
-
-        <div className="card">
-          <span>Total Paid</span>
-          <b>{rupee(ledger.totalPaid)}</b>
-        </div>
+        <div className="card danger"><span>Total Due</span><b>{rupee(ledger.totalDue)}</b></div>
+        <div className="card success"><span>Advance</span><b>{rupee(ledger.advance)}</b></div>
+        <div className="card"><span>Total Paid</span><b>{rupee(ledger.totalPaid)}</b></div>
       </div>
 
       <div className="tableWrap">
         <table>
-          <thead>
-            <tr>
-              <th>Month</th>
-              <th>Charge</th>
-              <th>Paid Adjusted</th>
-              <th>Balance Due</th>
-            </tr>
-          </thead>
-
+          <thead><tr><th>Month</th><th>Charge</th><th>Paid Adjusted</th><th>Balance Due</th></tr></thead>
           <tbody>
             {ledger.entries.map((entry) => (
               <tr key={entry.month}>
@@ -1435,6 +1836,49 @@ function LedgerView({ flat, data, whatsappLink }) {
             ))}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+function PaymentModal({ flat, data, paymentSettings, onClose, onCopyUpi }) {
+  const ledger = buildLedger(flat, data);
+  const upiId = paymentSettings?.upiId || "";
+  const qrImage = paymentSettings?.qrImage || "";
+  const amountText = ledger.totalDue > 0 ? rupee(ledger.totalDue) : "No due";
+
+  return (
+    <div className="modalOverlay" onClick={onClose}>
+      <div className="paymentModal" onClick={(e) => e.stopPropagation()}>
+        <div className="modalHeader">
+          <div>
+            <h2>Pay Maintenance</h2>
+            <p>Flat {flat.flatNo} · {flat.ownerName}</p>
+          </div>
+
+          <button className="iconBtn" onClick={onClose}>×</button>
+        </div>
+
+        <div className="cards modalCards">
+          <div className="card danger"><span>Total Due</span><b>{amountText}</b></div>
+          <div className="card success"><span>Advance</span><b>{rupee(ledger.advance)}</b></div>
+        </div>
+
+        {qrImage ? (
+          <img className="qrImage" src={qrImage} alt="Manager UPI QR" />
+        ) : (
+          <div className="qrPlaceholder large">Manager ne QR image upload nahi ki hai.</div>
+        )}
+
+        <div className="upiBox">
+          <span>Manager UPI ID</span>
+          <b>{upiId || "UPI ID not added"}</b>
+          <button onClick={onCopyUpi}>Copy UPI ID</button>
+        </div>
+
+        <p className="paymentNote">
+          Payment karne ke baad screenshot manager ko WhatsApp kar dein. Manager payment verify karke entry save karega.
+        </p>
       </div>
     </div>
   );
