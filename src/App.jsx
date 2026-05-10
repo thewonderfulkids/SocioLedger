@@ -30,7 +30,9 @@ const initialData = {
   paymentSettings: {
     upiId: "",
     qrImage: "",
+    gatewayEnabled: false,
   },
+  subscription: null,
 };
 
 const seedUsers = {
@@ -136,6 +138,29 @@ function normalizeList(value) {
     id: item?.id || key,
     ...item,
   }));
+}
+
+function normalizeSocieties(value) {
+  if (!value) return [];
+
+  return Object.entries(value).map(([id, society]) => ({
+    id,
+    ...(society.profile || society),
+  }));
+}
+
+function societyPath(societyId, child = "") {
+  return child ? `societies/${societyId}/${child}` : `societies/${societyId}`;
+}
+
+function getUserSocietyIds(user) {
+  if (!user?.societyIds) return [];
+
+  if (Array.isArray(user.societyIds)) {
+    return user.societyIds;
+  }
+
+  return Object.keys(user.societyIds).filter((id) => user.societyIds[id]);
 }
 
 function getRateForMonth(rateHistory, monthKey) {
@@ -336,55 +361,113 @@ export default function App() {
     societyIds: [],
   });
 
-  useEffect(() => {
-    const unsubscribe = onValue(ref(db), async (snapshot) => {
-      const value = snapshot.val() || {};
+useEffect(() => {
+  const unsubUsers = onValue(ref(db, "users"), (snapshot) => {
+    const users = normalizeList(snapshot.val() || []);
 
-      if (!value.users) await set(ref(db, "users"), seedUsers);
-      if (!value.rateHistory) await set(ref(db, "rateHistory"), seedRateHistory);
-      if (!value.paymentSettings) await set(ref(db, "paymentSettings"), seedPaymentSettings);
-      if (!value.societies) await set(ref(db, "societies"), seedSocieties);
+    setData((prev) => ({
+      ...prev,
+      users,
+    }));
 
-      const users = normalizeList(value.users || seedUsers);
-      const societies = normalizeList(value.societies || seedSocieties).sort((a, b) =>
-        String(a.name || "").localeCompare(String(b.name || ""))
-      );
+    setLoading(false);
+  });
 
-      const flats = normalizeList(value.flats || [])
-        .filter((flat) => flat && flat.id)
-        .sort((a, b) =>
-          String(a.flatNo || "").localeCompare(String(b.flatNo || ""), undefined, {
-            numeric: true,
-          })
-        );
+  const unsubSocieties = onValue(ref(db, "societies"), (snapshot) => {
+    const societies = normalizeSocieties(snapshot.val() || {}).sort((a, b) =>
+      String(a.name || "").localeCompare(String(b.name || ""))
+    );
 
-      const rateHistory = normalizeList(value.rateHistory || seedRateHistory).sort((a, b) =>
-        String(a.fromMonth || "").localeCompare(String(b.fromMonth || ""))
-      );
+    setData((prev) => ({
+      ...prev,
+      societies,
+    }));
 
-      const payments = normalizeList(value.payments || []).sort(
-        (a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0)
-      );
+    if (!selectedSocietyId && societies[0]?.id) {
+      setSelectedSocietyId(societies[0].id);
+    }
+  });
 
-      const expenses = normalizeList(value.expenses || []).sort(
-        (a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0)
-      );
+  return () => {
+    unsubUsers();
+    unsubSocieties();
+  };
+}, []);
 
-      setData({
-        users,
-        societies,
-        flats,
-        rateHistory,
-        payments,
-        expenses,
-        paymentSettings: value.paymentSettings || seedPaymentSettings,
-      });
+useEffect(() => {
+  if (!user || !selectedSocietyId) return;
 
-      setLoading(false);
-    });
+  const basePath = societyPath(selectedSocietyId);
 
-    return () => unsubscribe();
-  }, []);
+  const unsubFlats = onValue(ref(db, `${basePath}/flats`), (snapshot) => {
+    const flats = normalizeList(snapshot.val() || []).sort((a, b) =>
+      String(a.flatNo || "").localeCompare(String(b.flatNo || ""), undefined, {
+        numeric: true,
+      })
+    );
+
+    setData((prev) => ({
+      ...prev,
+      flats,
+    }));
+  });
+
+  const unsubRates = onValue(ref(db, `${basePath}/rateHistory`), (snapshot) => {
+    const rateHistory = normalizeList(snapshot.val() || []).sort((a, b) =>
+      String(a.fromMonth || "").localeCompare(String(b.fromMonth || ""))
+    );
+
+    setData((prev) => ({
+      ...prev,
+      rateHistory,
+    }));
+  });
+
+  const unsubPayments = onValue(ref(db, `${basePath}/payments`), (snapshot) => {
+    const payments = normalizeList(snapshot.val() || []).sort(
+      (a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0)
+    );
+
+    setData((prev) => ({
+      ...prev,
+      payments,
+    }));
+  });
+
+  const unsubExpenses = onValue(ref(db, `${basePath}/expenses`), (snapshot) => {
+    const expenses = normalizeList(snapshot.val() || []).sort(
+      (a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0)
+    );
+
+    setData((prev) => ({
+      ...prev,
+      expenses,
+    }));
+  });
+
+  const unsubPaymentSettings = onValue(ref(db, `${basePath}/paymentSettings`), (snapshot) => {
+    setData((prev) => ({
+      ...prev,
+      paymentSettings: snapshot.val() || seedPaymentSettings,
+    }));
+  });
+
+  const unsubSubscription = onValue(ref(db, `${basePath}/subscription`), (snapshot) => {
+    setData((prev) => ({
+      ...prev,
+      subscription: snapshot.val() || null,
+    }));
+  });
+
+  return () => {
+    unsubFlats();
+    unsubRates();
+    unsubPayments();
+    unsubExpenses();
+    unsubPaymentSettings();
+    unsubSubscription();
+  };
+}, [user, selectedSocietyId]);
 
   useEffect(() => {
     setPaymentSettingsForm({
@@ -410,24 +493,21 @@ export default function App() {
     return normalizePhone(flat.phone) === normalizePhone(user.phone);
   }
 
+  const userSocietyIds = getUserSocietyIds(user);
+
   const allowedSocieties =
     user?.role === roles.SUPER_ADMIN
       ? data.societies
       : user?.role === roles.MANAGER
-      ? data.societies.filter((s) => user.societyIds?.includes(s.id))
+      ? data.societies.filter((s) => userSocietyIds.includes(s.id))
       : data.societies.filter((s) => s.id === selectedSocietyId);
-
-  const societyFlats = data.flats.filter((flat) => (flat.societyId || "default_society") === selectedSocietyId);
-  const societyPayments = data.payments.filter((p) => (p.societyId || "default_society") === selectedSocietyId);
-  const societyExpenses = data.expenses.filter((e) => (e.societyId || "default_society") === selectedSocietyId);
-  const societyRates = data.rateHistory.filter((r) => (r.societyId || "default_society") === selectedSocietyId);
 
   const societyData = {
     ...data,
-    flats: societyFlats,
-    payments: societyPayments,
-    expenses: societyExpenses,
-    rateHistory: societyRates,
+    flats: data.flats,
+    payments: data.payments,
+    expenses: data.expenses,
+    rateHistory: data.rateHistory,
   };
 
   const activeFlats = societyData.flats.filter((flat) => flat.active !== false);
@@ -443,7 +523,7 @@ export default function App() {
 
   const payModalFlat = useMemo(() => {
     return societyData.flats.find((flat) => flat.id === payModalFlatId) || null;
-  }, [data.flats, payModalFlatId]);
+  }, [societyData.flats, payModalFlatId]);
 
   const dashboard = useMemo(() => {
     let totalDue = 0;
@@ -524,27 +604,16 @@ export default function App() {
   }, [activeFlats, societyData, statusMonth]);
 
   function login() {
-    const phone = normalizePhone(loginPhone);
+    const rawPhone = String(loginPhone || "").replace(/\D/g, "");
 
-    if (!phone || phone.length !== 10) {
-      alert("Valid 10 digit mobile number enter karo.");
+    if (rawPhone.length !== 10) {
+      alert("Exactly 10 digit mobile number enter karo.");
       return;
     }
 
+    const phone = rawPhone;
+    
     let foundUser = data.users.find((u) => normalizePhone(u.phone) === phone);
-
-    if (!foundUser) {
-      const residentFlat = data.flats.find((flat) => normalizePhone(flat.phone) === phone);
-
-      if (residentFlat) {
-        foundUser = {
-          id: `resident_${phone}`,
-          phone,
-          role: roles.RESIDENT,
-          name: residentFlat.ownerName || `Flat ${residentFlat.flatNo}`,
-        };
-      }
-    }
 
     if (!foundUser) {
       alert("User not found. Resident ka phone flat me add hona chahiye.");
@@ -554,6 +623,14 @@ export default function App() {
     if (foundUser.active === false) {
       alert("This user is inactive. Please contact Super Admin.");
       return;
+    }
+
+    const loginSocietyIds = getUserSocietyIds(foundUser);
+
+    if (foundUser.role === roles.SUPER_ADMIN) {
+      setSelectedSocietyId((prev) => prev || data.societies[0]?.id || "default_society");
+    } else if (loginSocietyIds[0]) {
+      setSelectedSocietyId(loginSocietyIds[0]);
     }
 
     setUser(foundUser);
@@ -587,7 +664,9 @@ export default function App() {
       name: manager.name || "",
       phone: manager.phone || "",
       password: manager.password || "",
-      societyIds: Array.isArray(manager.societyIds) ? manager.societyIds : Object.values(manager.societyIds || {}),
+      societyIds: Array.isArray(manager.societyIds) 
+        ? manager.societyIds 
+        : Object.keys(manager.societyIds || {}).filter((id) => manager.societyIds[id]),
     });
 
     setActiveTab("managers");
@@ -719,7 +798,7 @@ async function saveSociety() {
     }
 
     if (societyForm.id) {
-      await update(ref(db, `societies/${societyForm.id}`), {
+      await update(ref(db, `societies/${societyForm.id}/profile`), {
         name: societyForm.name.trim(),
         address: societyForm.address.trim(),
         updatedAt: Date.now(),
@@ -729,13 +808,35 @@ async function saveSociety() {
   } else {
     const id = createFirebaseId("societies");
 
-    await set(ref(db, `societies/${id}`), {
+    await set(ref(db, `societies/${id}/profile`), {
       id,
       name: societyForm.name.trim(),
       address: societyForm.address.trim(),
       active: true,
+      planId: "starter",
+      subscriptionStatus: "trial",
       createdAt: Date.now(),
+      updatedAt: Date.now(),
     });
+
+    await set(ref(db, `societies/${id}/paymentSettings`), {
+  upiId: "",
+  qrImage: "",
+  gatewayEnabled: false,
+  updatedAt: Date.now(),
+});
+
+await set(ref(db, `societies/${id}/subscription`), {
+  planId: "starter",
+  status: "trial",
+  billingCycle: "monthly",
+  maxFlats: 25,
+  billingAmount: 499,
+  startDate: new Date().toISOString().slice(0, 10),
+  endDate: "",
+  createdAt: Date.now(),
+  updatedAt: Date.now(),
+});
 
     setSelectedSocietyId(id);
     alert("Society added.");
@@ -766,7 +867,7 @@ async function toggleSocietyStatus(society) {
     return;
   }
 
-  await update(ref(db, `societies/${society.id}`), {
+  await update(ref(db, `societies/${society.id}/profile`), {
     active: society.active === false ? true : false,
     updatedAt: Date.now(),
   });
@@ -809,16 +910,33 @@ async function toggleSocietyStatus(society) {
       openingDue: Number(flatForm.openingDue || 0),
     };
 
+    let savedFlatId = flatForm.id;
+    
     if (flatForm.id) {
-      await update(ref(db, `flats/${flatForm.id}`), payload);
+      await update(ref(db, societyPath(selectedSocietyId, `flats/${flatForm.id}`)), payload);
     } else {
-      const id = createFirebaseId("flats");
-      await set(ref(db, `flats/${id}`), {
+      const id = createFirebaseId(societyPath(selectedSocietyId, "flats"));
+      await set(ref(db, societyPath(selectedSocietyId, `flats/${id}`)), {
         id,
         ...payload,
         active: true,
         advance: 0,
         createdAt: Date.now(),
+      });
+      
+      const residentUserId = `resident_${phone}`;
+      
+      await update(ref(db, `users/${residentUserId}`), {
+        id: residentUserId,
+        name: flatForm.ownerName.trim(),
+        phone,
+        role: roles.RESIDENT,
+        active: true,
+        flatId: savedFlatId,
+        societyIds: {
+          [selectedSocietyId]: true,
+          },
+        updatedAt: Date.now(),
       });
     }
 
@@ -842,7 +960,7 @@ async function toggleSocietyStatus(society) {
     if (!canManage()) return alert("You do not have permission.");
     if (!window.confirm("Is flat ko deactivate karna hai?")) return;
 
-    await update(ref(db, `flats/${id}`), {
+    await update(ref(db, societyPath(selectedSocietyId, `flats/${id}`)), {
       active: false,
       updatedAt: Date.now(),
     });
@@ -851,7 +969,7 @@ async function toggleSocietyStatus(society) {
   async function reactivateFlat(id) {
     if (!canManage()) return alert("You do not have permission.");
 
-    await update(ref(db, `flats/${id}`), {
+    await update(ref(db, societyPath(selectedSocietyId, `flats/${id}`)), {
       active: true,
       updatedAt: Date.now(),
     });
@@ -861,7 +979,7 @@ async function toggleSocietyStatus(society) {
     if (!isSuperAdmin()) return alert("Only Super Admin can delete flat.");
     if (!window.confirm("Flat permanently delete karna hai?")) return;
 
-    await remove(ref(db, `flats/${id}`));
+    await remove(ref(db, societyPath(selectedSocietyId, `flats/${id}`)));
     if (selectedFlatId === id) setSelectedFlatId("");
   }
 
@@ -874,11 +992,12 @@ async function toggleSocietyStatus(society) {
     }
 
     const existingRate = data.rateHistory.find((rate) => rate.fromMonth === rateForm.fromMonth);
-    const id = existingRate?.id || createFirebaseId("rateHistory");
+    const id =
+      existingRate?.id ||
+      createFirebaseId(societyPath(selectedSocietyId, "rateHistory"));
 
-    await set(ref(db, `rateHistory/${id}`), {
+    await set(ref(db, societyPath(selectedSocietyId, `rateHistory/${id}`)), {
       id,
-      societyId: selectedSocietyId,
       fromMonth: rateForm.fromMonth,
       amount: Number(rateForm.amount),
       updatedAt: Date.now(),
@@ -898,11 +1017,10 @@ async function toggleSocietyStatus(society) {
       return;
     }
 
-    const id = createFirebaseId("payments");
+    const id = createFirebaseId(societyPath(selectedSocietyId, "payments"));
 
-    await set(ref(db, `payments/${id}`), {
+    await set(ref(db, societyPath(selectedSocietyId, `payments/${id}`)), {
       id,
-      societyId: selectedSocietyId,
       flatId: paymentForm.flatId,
       amount: Number(paymentForm.amount),
       mode: paymentForm.mode,
@@ -931,11 +1049,10 @@ async function toggleSocietyStatus(society) {
       return;
     }
 
-    const id = createFirebaseId("expenses");
+    const id = createFirebaseId(societyPath(selectedSocietyId, "expenses"));
 
-    await set(ref(db, `expenses/${id}`), {
+    await set(ref(db, societyPath(selectedSocietyId, `expenses/${id}`)), {
       id,
-      societyId: selectedSocietyId,
       amount: Number(expenseForm.amount),
       category: expenseForm.category,
       date: expenseForm.date,
@@ -956,7 +1073,7 @@ async function toggleSocietyStatus(society) {
     if (!isSuperAdmin()) return alert("Only Super Admin can delete expense.");
     if (!window.confirm("Expense permanently delete karna hai?")) return;
 
-    await remove(ref(db, `expenses/${id}`));
+    await remove(ref(db, societyPath(selectedSocietyId, `expenses/${id}`)));
   }
 
   function handleQrUpload(event) {
@@ -990,9 +1107,10 @@ async function toggleSocietyStatus(society) {
       return;
     }
 
-    await set(ref(db, "paymentSettings"), {
+    await set(ref(db, societyPath(selectedSocietyId, "paymentSettings")), {
       upiId: paymentSettingsForm.upiId.trim(),
       qrImage: paymentSettingsForm.qrImage || "",
+      gatewayEnabled: data.paymentSettings?.gatewayEnabled || false,
       updatedBy: user?.name || "",
       updatedAt: Date.now(),
     });
@@ -1111,9 +1229,10 @@ async function toggleSocietyStatus(society) {
 
           <input
             value={loginPhone}
-            onChange={(e) => setLoginPhone(e.target.value)}
+            onChange={(e) => setLoginPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
             placeholder="Enter mobile number"
             inputMode="numeric"
+            maxLength={10}
             onKeyDown={(e) => {
               if (e.key === "Enter") login();
             }}
@@ -1316,7 +1435,7 @@ async function toggleSocietyStatus(society) {
                   .map((manager) => {
                     const assignedIds = Array.isArray(manager.societyIds)
                       ? manager.societyIds
-                      : Object.values(manager.societyIds || {});
+                      : Object.keys(manager.societyIds || {}).filter((id) => manager.societyIds[id]);
 
                     const assignedNames = assignedIds
                       .map((id) => data.societies.find((s) => s.id === id)?.name)
