@@ -1,7 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { getDatabase } from "firebase/database";
 
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: "AIzaSyDfEVbf8vksNEUCjjPc3DQItdjDs7XvXVY",
   authDomain: "socioledger-8e2f6.firebaseapp.com",
   databaseURL:
