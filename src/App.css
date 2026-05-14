@@ -1005,3 +1005,33 @@ td button {
   width: 16px;
   height: 16px;
 }
+
+/* Mobile visibility fix only */
+@media (max-width: 520px) {
+  .loginCard h1,
+  .ledgerCard h2,
+  .pageHeader h1,
+  .pageHeader h2,
+  .flatCard h2,
+  .flatCard h3 {
+    color: #111827 !important;
+    opacity: 1 !important;
+    font-weight: 800 !important;
+  }
+
+  .dark .loginCard h1,
+  .dark .ledgerCard h2,
+  .dark .pageHeader h1,
+  .dark .pageHeader h2,
+  .dark .flatCard h2,
+  .dark .flatCard h3 {
+    color: #f9fafb !important;
+  }
+
+  .loginCard p,
+  .ledgerCard p,
+  .pageHeader p,
+  .flatCard p {
+    opacity: 1 !important;
+  }
+}
