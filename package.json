@@ -9,10 +9,13 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "migrate:saas": "node scripts/migrateToSaas.js",
-    "sync:residents": "node scripts/createResidentUsersFromFlats.js"
+    "sync:residents": "node scripts/createResidentUsersFromFlats.js",
+    "apply:trial": "node scripts/apply15DayTrial.js",
+    "create:auth-users": "node scripts/createAuthUsers.js"
   },
   "dependencies": {
-    "firebase": "^12.12.1",
+    "firebase": "^12.13.0",
+    "firebase-admin": "^13.9.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5"
   },

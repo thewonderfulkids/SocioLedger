@@ -1,6 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ref, onValue, set, push, update, remove } from "firebase/database";
+import { ref, onValue, set, push, update, remove, get } from "firebase/database";
 import { db } from "./firebase";
+import {
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+} from "firebase/auth";
+import { auth } from "./firebase";
 import "./App.css";
 import logo from "./assets/socioledger-logo.png";
 
@@ -85,6 +91,10 @@ function normalizePhone(phone = "") {
   return String(phone).replace(/\D/g, "").slice(-10);
 }
 
+function phoneToEmail(phone = "") {
+  return `${normalizePhone(phone)}@socioledger.local`;
+}
+
 function getCurrentMonth() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -100,6 +110,74 @@ function formatMonth(monthKey) {
 
 function rupee(n) {
   return `₹${Number(n || 0).toLocaleString("en-IN")}`;
+}
+
+function toDateOnly(dateValue) {
+  if (!dateValue) return new Date();
+
+  if (typeof dateValue === "number") {
+    return new Date(dateValue);
+  }
+
+  return new Date(`${dateValue}T00:00:00`);
+}
+
+function addDaysISO(dateValue, days) {
+  const date = toDateOnly(dateValue);
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function getTodayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getSubscriptionAccess(subscription) {
+  const today = getTodayISO();
+
+  if (!subscription) {
+    return {
+      status: "trial",
+      blocked: false,
+      label: "Trial",
+      trialEndsAt: "",
+      daysLeft: 15,
+    };
+  }
+
+  const status = subscription.status || "trial";
+
+  const trialStart =
+    subscription.trialStartDate ||
+    subscription.startDate ||
+    subscription.createdAt ||
+    today;
+
+  const trialEndsAt = subscription.trialEndsAt || addDaysISO(trialStart, 15);
+  const endDate = subscription.endDate || "";
+
+  const isActivePaid = status === "active" && (!endDate || endDate >= today);
+  const isTrialValid = status === "trial" && trialEndsAt >= today;
+
+  const blocked =
+    status === "blocked" ||
+    status === "expired" ||
+    status === "past_due" ||
+    (!isActivePaid && !isTrialValid);
+
+  const daysLeft = Math.max(
+    Math.ceil((toDateOnly(trialEndsAt) - toDateOnly(today)) / (1000 * 60 * 60 * 24)),
+    0
+  );
+
+  return {
+    status,
+    blocked,
+    label: isActivePaid ? "Active" : isTrialValid ? "Trial" : "Expired",
+    trialEndsAt,
+    endDate,
+    daysLeft,
+  };
 }
 
 function monthRange(start, end) {
@@ -305,9 +383,12 @@ function downloadCSV(filename, rows) {
 export default function App() {
   const [data, setData] = useState(initialData);
   const [loading, setLoading] = useState(true);
+  const [authReady, setAuthReady] = useState(false);
 
   const [user, setUser] = useState(null);
   const [loginPhone, setLoginPhone] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [authUser, setAuthUser] = useState(null);
 
   const [activeTab, setActiveTab] = useState("dashboard");
   const [darkMode, setDarkMode] = useState(false);
@@ -361,7 +442,23 @@ export default function App() {
     societyIds: [],
   });
 
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (firebaseUser) => {
+      setAuthUser(firebaseUser || null);
+      setAuthReady(true);
+    });
+
+    return () => unsub();
+  }, []);
+
 useEffect(() => {
+  if (!authReady) return;
+
+  if (!authUser) {
+    setLoading(false);
+    return;
+  }
+
   const unsubUsers = onValue(ref(db, "users"), (snapshot) => {
     const users = normalizeList(snapshot.val() || []);
 
@@ -392,10 +489,33 @@ useEffect(() => {
     unsubUsers();
     unsubSocieties();
   };
-}, []);
+}, [authReady, authUser]);
 
 useEffect(() => {
-  if (!user || !selectedSocietyId) return;
+  if (!authReady || !authUser || user || data.users.length === 0) return;
+
+  const phone = String(authUser.email || "").split("@")[0];
+  const foundUser = data.users.find((u) => normalizePhone(u.phone) === phone);
+
+  if (!foundUser || foundUser.active === false) {
+    setUser(null);
+    return;
+  }
+
+  const loginSocietyIds = getUserSocietyIds(foundUser);
+
+  if (foundUser.role === roles.SUPER_ADMIN) {
+    setSelectedSocietyId((prev) => prev || data.societies[0]?.id || "default_society");
+  } else if (loginSocietyIds[0]) {
+    setSelectedSocietyId(loginSocietyIds[0]);
+  }
+
+  setUser(foundUser);
+  setActiveTab("dashboard");
+}, [authReady, authUser, user, data.users, data.societies]);
+
+useEffect(() => {
+  if (!authUser || !user || !selectedSocietyId) return;
 
   const basePath = societyPath(selectedSocietyId);
 
@@ -467,7 +587,7 @@ useEffect(() => {
     unsubPaymentSettings();
     unsubSubscription();
   };
-}, [user, selectedSocietyId]);
+}, [authUser, user, selectedSocietyId]);
 
   useEffect(() => {
     setPaymentSettingsForm({
@@ -603,27 +723,54 @@ useEffect(() => {
     };
   }, [activeFlats, societyData, statusMonth]);
 
-  function login() {
-    const rawPhone = String(loginPhone || "").replace(/\D/g, "");
+  const subscriptionAccess = useMemo(() => {
+    return getSubscriptionAccess(data.subscription);
+  }, [data.subscription]);
 
-    if (rawPhone.length !== 10) {
-      alert("Exactly 10 digit mobile number enter karo.");
-      return;
-    }
+  const isSubscriptionBlocked =
+    user &&
+    user.role !== roles.SUPER_ADMIN &&
+    subscriptionAccess.blocked;
 
-    const phone = rawPhone;
-    
-    let foundUser = data.users.find((u) => normalizePhone(u.phone) === phone);
+  async function login() {
+  const rawPhone = String(loginPhone || "").replace(/\D/g, "");
+
+  if (rawPhone.length !== 10) {
+    alert("Exactly 10 digit mobile number enter karo.");
+    return;
+  }
+
+  if (!loginPassword.trim()) {
+    alert("Password enter karo.");
+    return;
+  }
+
+  const phone = rawPhone;
+  const email = phoneToEmail(phone);
+
+  try {
+    await signInWithEmailAndPassword(auth, email, loginPassword.trim());
+
+    const usersSnapshot = await get(ref(db, "users"));
+    const users = normalizeList(usersSnapshot.val() || []);
+    const foundUser = users.find((u) => normalizePhone(u.phone) === phone);
 
     if (!foundUser) {
-      alert("User not found. Resident ka phone flat me add hona chahiye.");
+      alert("User not found. Please contact Super Admin.");
+      await signOut(auth);
       return;
     }
-    
+
     if (foundUser.active === false) {
       alert("This user is inactive. Please contact Super Admin.");
+      await signOut(auth);
       return;
     }
+
+    setData((prev) => ({
+      ...prev,
+      users,
+    }));
 
     const loginSocietyIds = getUserSocietyIds(foundUser);
 
@@ -635,11 +782,19 @@ useEffect(() => {
 
     setUser(foundUser);
     setActiveTab("dashboard");
+  } catch (error) {
+    console.error(error);
+    alert("Invalid login/password. Please check details.");
   }
+}
 
-  function logout() {
+  async function logout() {
+    await signOut(auth);
+
     setUser(null);
+    setAuthUser(null);
     setLoginPhone("");
+    setLoginPassword("");
     setActiveTab("dashboard");
     setSelectedFlatId("");
     setPayModalFlatId("");
@@ -679,12 +834,15 @@ useEffect(() => {
       return;
     }
 
-    const phone = normalizePhone(managerForm.phone);
-
-    if (!managerForm.name.trim() || phone.length !== 10 || !managerForm.password.trim()) {
-    
+    const rawPhone = String(managerForm.phone || "").replace(/\D/g, "");
+    const phone = rawPhone;
     const password = managerForm.password.trim();
-    
+
+    if (!managerForm.name.trim() || phone.length !== 10 || !password) {
+      alert("Manager name, valid phone and password required hai.");
+      return;
+    }
+
     const strongPassword =
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@#$%^&*!]).{8,}$/.test(password);
 
@@ -695,23 +853,10 @@ useEffect(() => {
       return;
     }
 
-      alert("Manager name, valid phone and password required hai.");
-      return;
-    }
-
-    if (managerForm.societyIds.length === 0) {
-      alert("Manager ko kam se kam 1 society assign karo.");
-      return;
-    }
-
-    const duplicate = data.users.find(
-      (u) => normalizePhone(u.phone) === phone && u.id !== managerForm.id
-    );
-
-    if (duplicate) {
-      alert("Ye mobile number already kisi user/manager ke paas hai.");
-      return;
-    }
+    const societyIdsMap = {};
+      managerForm.societyIds.forEach((societyId) => {
+      societyIdsMap[societyId] = true;
+    });
 
     const id = managerForm.id || createFirebaseId("users");
 
@@ -722,7 +867,7 @@ useEffect(() => {
       password: managerForm.password.trim(),
       role: roles.MANAGER,
       active: true,
-      societyIds: managerForm.societyIds,
+      societyIds: societyIdsMap,
       updatedAt: Date.now(),
     };
 
@@ -826,13 +971,16 @@ async function saveSociety() {
   updatedAt: Date.now(),
 });
 
+const today = getTodayISO();
 await set(ref(db, `societies/${id}/subscription`), {
   planId: "starter",
   status: "trial",
   billingCycle: "monthly",
   maxFlats: 25,
   billingAmount: 499,
-  startDate: new Date().toISOString().slice(0, 10),
+  trialStartDate: today,
+  trialEndsAt: addDaysISO(today, 15),
+  startDate: today,
   endDate: "",
   createdAt: Date.now(),
   updatedAt: Date.now(),
@@ -873,7 +1021,82 @@ async function toggleSocietyStatus(society) {
   });
 }
 
-  async function saveFlat() {
+async function markSocietyPaid(society) {
+  if (!isSuperAdmin()) {
+    alert("Only Super Admin can update subscription.");
+    return;
+  }
+
+  const today = getTodayISO();
+  const endDate = addDaysISO(today, 30);
+
+  await update(ref(db, `societies/${society.id}/subscription`), {
+    status: "active",
+    paidAt: Date.now(),
+    lastPaidAt: Date.now(),
+    billingCycle: "monthly",
+    startDate: today,
+    endDate,
+    updatedAt: Date.now(),
+  });
+
+  await update(ref(db, `societies/${society.id}/profile`), {
+    subscriptionStatus: "active",
+    updatedAt: Date.now(),
+  });
+
+  alert(`Subscription active kar diya. Valid till ${endDate}`);
+}
+
+async function blockSocietySubscription(society) {
+  if (!isSuperAdmin()) {
+    alert("Only Super Admin can block subscription.");
+    return;
+  }
+
+  const ok = window.confirm(`${society.name} ka subscription block karna hai?`);
+  if (!ok) return;
+
+  await update(ref(db, `societies/${society.id}/subscription`), {
+    status: "blocked",
+    blockedAt: Date.now(),
+    updatedAt: Date.now(),
+  });
+
+  await update(ref(db, `societies/${society.id}/profile`), {
+    subscriptionStatus: "blocked",
+    updatedAt: Date.now(),
+  });
+
+  alert("Subscription blocked.");
+}
+
+async function resetSocietyTrial(society) {
+  if (!isSuperAdmin()) {
+    alert("Only Super Admin can reset trial.");
+    return;
+  }
+
+  const today = getTodayISO();
+
+  await update(ref(db, `societies/${society.id}/subscription`), {
+    status: "trial",
+    trialStartDate: today,
+    trialEndsAt: addDaysISO(today, 15),
+    startDate: today,
+    endDate: "",
+    updatedAt: Date.now(),
+  });
+
+  await update(ref(db, `societies/${society.id}/profile`), {
+    subscriptionStatus: "trial",
+    updatedAt: Date.now(),
+  });
+
+  alert("15 days trial reset kar diya.");
+}
+
+async function saveFlat() {
     if (!canManage()) {
       alert("You do not have permission.");
       return;
@@ -916,6 +1139,8 @@ async function toggleSocietyStatus(society) {
       await update(ref(db, societyPath(selectedSocietyId, `flats/${flatForm.id}`)), payload);
     } else {
       const id = createFirebaseId(societyPath(selectedSocietyId, "flats"));
+      savedFlatId = id;
+
       await set(ref(db, societyPath(selectedSocietyId, `flats/${id}`)), {
         id,
         ...payload,
@@ -925,20 +1150,21 @@ async function toggleSocietyStatus(society) {
       });
       
       const residentUserId = `resident_${phone}`;
-      
-      await update(ref(db, `users/${residentUserId}`), {
-        id: residentUserId,
-        name: flatForm.ownerName.trim(),
-        phone,
-        role: roles.RESIDENT,
-        active: true,
-        flatId: savedFlatId,
-        societyIds: {
-          [selectedSocietyId]: true,
-          },
-        updatedAt: Date.now(),
-      });
     }
+    const residentUserId = `resident_${phone}`;
+
+    await update(ref(db, `users/${residentUserId}`), {
+      id: residentUserId,
+      name: flatForm.ownerName.trim(),
+      phone,
+      role: roles.RESIDENT,
+      active: true,
+      flatId: savedFlatId,
+      societyIds: {
+        [selectedSocietyId]: true,
+     },
+    updatedAt: Date.now(),
+  });
 
     setFlatForm(emptyFlatForm);
   }
@@ -1206,7 +1432,7 @@ async function toggleSocietyStatus(society) {
     downloadCSV(`SocioLedger_Payment_Status_${monthlyStatus.month}.csv`, rows);
   }
 
-  if (loading) {
+  if (!authReady) {
     return (
       <div className="loginPage">
         <div className="loginCard">
@@ -1215,8 +1441,8 @@ async function toggleSocietyStatus(society) {
           <p>Loading data from Firebase...</p>
         </div>
       </div>
-    );
-  }
+      );
+    }
 
   if (!user) {
     return (
@@ -1237,7 +1463,15 @@ async function toggleSocietyStatus(society) {
               if (e.key === "Enter") login();
             }}
           />
-
+          <input
+            type="password"
+            value={loginPassword}
+            onChange={(e) => setLoginPassword(e.target.value)}
+            placeholder="Enter password"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") login();
+            }}
+          />
           <button onClick={login}>Login</button>
 
           <p className="loginHint">Use registered admin, manager, or resident mobile number.</p>
@@ -1348,7 +1582,15 @@ async function toggleSocietyStatus(society) {
       </aside>
 
       <main className="main">
-        {activeTab === "managers" && isSuperAdmin() && (
+
+        {isSubscriptionBlocked ? (
+          <SubscriptionBlocked
+            subscriptionAccess={subscriptionAccess}
+            onLogout={logout}
+          />
+        ) : (
+        <>
+          {activeTab === "managers" && isSuperAdmin() && (
           <>
             <div className="pageHeader">
               <div>
@@ -1499,7 +1741,7 @@ async function toggleSocietyStatus(society) {
                 onChange={(e) => setSocietyForm({ ...societyForm, address: e.target.value })}
               />
 
-              <button onClick={saveSociety}>Add Society
+              <button onClick={saveSociety}>
                 {societyForm.id ? "Update Society" : "Add Society"}
               </button>
 
@@ -1542,6 +1784,21 @@ async function toggleSocietyStatus(society) {
                           onClick={() => toggleSocietyStatus(society)}
                         >
                           {society.active === false ? "Activate" : "Deactivate"}
+                        </button>
+                        
+                        <button onClick={() => markSocietyPaid(society)}>
+                          Mark Paid 30 Days
+                        </button>
+                        
+                        <button onClick={() => resetSocietyTrial(society)}>
+                        Reset 15 Days Trial
+                        </button>
+
+                        <button
+                          className="dangerBtn"
+                          onClick={() => blockSocietySubscription(society)}
+                        >
+                          Block Subscription
                         </button>
                       </td>
                     </tr>
@@ -1913,6 +2170,8 @@ async function toggleSocietyStatus(society) {
             onCopyUpi={copyUpiId}
           />
         )}
+      </>
+      )}
       </main>
     </div>
   );
@@ -2008,6 +2267,39 @@ function EmptyState({ title, text }) {
     <div className="emptyState">
       <h3>{title}</h3>
       <p>{text}</p>
+    </div>
+  );
+}
+
+function SubscriptionBlocked({ subscriptionAccess, onLogout }) {
+  return (
+    <div className="emptyState">
+      <h3>Trial Expired / Subscription Required</h3>
+
+      <p>
+        Is society ka 15 days trial complete ho gaya hai. App continue use karne
+        ke liye subscription payment required hai.
+      </p>
+
+      <div className="cards">
+        <div className="card danger">
+          <span>Status</span>
+          <b>{subscriptionAccess.label}</b>
+        </div>
+
+        <div className="card">
+          <span>Trial End Date</span>
+          <b>{subscriptionAccess.trialEndsAt || "-"}</b>
+        </div>
+      </div>
+
+      <p className="hintText">
+        Please Super Admin / SocioLedger team se contact karke payment update karwayein.
+      </p>
+
+      <button className="dangerBtn" onClick={onLogout}>
+        Logout
+      </button>
     </div>
   );
 }
