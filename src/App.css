@@ -1035,3 +1035,176 @@ td button {
     opacity: 1 !important;
   }
 }
+
+/* Ledger flat title mobile visibility fix */
+@media (max-width: 520px) {
+  .ledgerHeader h2 {
+    color: #111827 !important;
+    opacity: 1 !important;
+    font-weight: 800 !important;
+  }
+
+  .dark .ledgerHeader h2 {
+    color: #f9fafb !important;
+  }
+}
+
+/* Mobile sidebar + tabs UX fix */
+@media (max-width: 900px) {
+  .sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    width: 100%;
+    height: auto;
+    max-height: none;
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .profileBox {
+    margin-bottom: 0;
+  }
+
+  .sidebarBrand {
+    margin-bottom: 6px;
+  }
+
+  .sidebarBrand img {
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+  }
+
+  .sidebarBrand h2 {
+    font-size: 22px;
+  }
+
+  .sidebar p,
+  .role {
+    display: none;
+  }
+
+  .societySelect {
+    margin: 6px 0;
+    min-height: 42px;
+  }
+
+  .navButtons {
+    display: flex !important;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 4px;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .navButtons::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sidebar button {
+    width: auto;
+    min-width: max-content;
+    min-height: 40px;
+    padding: 9px 14px;
+    scroll-snap-align: start;
+  }
+
+  .sidebar .modeBtn,
+  .sidebar .logout {
+    min-width: max-content;
+  }
+
+  .main {
+    padding-top: 16px;
+  }
+}
+
+/* Mobile flat title visibility fix */
+@media (max-width: 520px) {
+  .ledgerHeader h2 {
+    color: #111827 !important;
+    opacity: 1 !important;
+    font-weight: 800 !important;
+    text-shadow: none !important;
+  }
+
+  .dark .ledgerHeader h2 {
+    color: #f9fafb !important;
+  }
+}
+
+/* Mobile horizontal tabs layout */
+@media (max-width: 900px) {
+  .sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    width: 100%;
+    height: auto;
+    max-height: none;
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .profileBox {
+    margin-bottom: 0;
+  }
+
+  .sidebarBrand {
+    margin-bottom: 6px;
+  }
+
+  .sidebarBrand img {
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+  }
+
+  .sidebarBrand h2 {
+    font-size: 22px;
+  }
+
+  .sidebar p,
+  .role {
+    display: none;
+  }
+
+  .societySelect {
+    margin: 6px 0;
+    min-height: 42px;
+  }
+
+  .navButtons {
+    display: flex !important;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 4px;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .navButtons::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sidebar button {
+    width: auto;
+    min-width: max-content;
+    min-height: 40px;
+    padding: 9px 14px;
+    scroll-snap-align: start;
+  }
+
+  .sidebar .modeBtn,
+  .sidebar .logout {
+    min-width: max-content;
+  }
+
+  .main {
+    padding-top: 16px;
+  }
+}
