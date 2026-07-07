@@ -1208,3 +1208,1660 @@ td button {
     padding-top: 16px;
   }
 }
+
+/* Premium UI stabilization patch - July 2026 */
+:root {
+  --bg: #eef3fb;
+  --card: rgba(255, 255, 255, 0.94);
+  --border: #d8e1ef;
+  --primary: #1d4ed8;
+  --primary-dark: #1e40af;
+  --soft-blue: rgba(29, 78, 216, 0.08);
+  --shadow: 0 14px 36px rgba(15, 23, 42, 0.09);
+  --shadow-soft: 0 8px 22px rgba(15, 23, 42, 0.06);
+}
+
+body {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background:
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.14), transparent 34%),
+    linear-gradient(180deg, #f8fbff 0%, var(--bg) 42%, #f4f7fb 100%);
+  overflow-x: hidden;
+}
+
+.app {
+  width: 100%;
+  min-width: 0;
+}
+
+.app.dark {
+  --bg: #0b1120;
+  --card: rgba(17, 24, 39, 0.94);
+  --border: #263244;
+  --soft-blue: rgba(59, 130, 246, 0.14);
+}
+
+.main {
+  min-width: 0;
+  max-width: 1480px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 26px clamp(18px, 2.4vw, 34px);
+}
+
+.sidebar {
+  width: 278px;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 10px 0 30px rgba(15, 23, 42, 0.08);
+}
+
+.sidebarBrand h2,
+.sidebar h2 {
+  font-size: 25px;
+  letter-spacing: -0.7px;
+  white-space: normal;
+}
+
+.sidebarBrand img {
+  width: 50px;
+  height: 50px;
+  min-width: 50px;
+}
+
+.pageHeader {
+  position: relative;
+  padding: 20px;
+  border-radius: 24px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.9), rgba(255,255,255,0.68));
+  border: 1px solid rgba(216, 225, 239, 0.88);
+  box-shadow: var(--shadow-soft);
+  align-items: center;
+}
+
+.dark .pageHeader {
+  background: linear-gradient(135deg, rgba(17,24,39,0.95), rgba(15,23,42,0.74));
+  border-color: rgba(38, 50, 68, 0.9);
+}
+
+.pageHeader h1,
+.main h1 {
+  font-size: clamp(22px, 2vw, 30px);
+  font-weight: 800;
+  color: var(--text);
+  overflow-wrap: normal;
+}
+
+.pageHeader p {
+  max-width: 820px;
+  overflow-wrap: break-word;
+}
+
+.card,
+.chartCard,
+.formGrid,
+.tableWrap,
+.ledgerHeader,
+.emptyState,
+.settingsCard,
+.managerSocietyBox {
+  backdrop-filter: blur(10px);
+}
+
+.card,
+.chartCard,
+.settingsCard,
+.managerSocietyBox,
+.formGrid,
+.ledgerHeader,
+.emptyState {
+  border-radius: 22px;
+}
+
+.card {
+  padding: 18px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,255,255,0.88));
+  border-color: rgba(216, 225, 239, 0.92);
+}
+
+.dark .card {
+  background: linear-gradient(180deg, rgba(17,24,39,0.96), rgba(17,24,39,0.86));
+}
+
+.card span {
+  display: block;
+  min-height: 18px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  overflow-wrap: normal;
+}
+
+.card b {
+  font-size: clamp(19px, 1.7vw, 25px);
+  letter-spacing: -0.35px;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.cards {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 16px;
+}
+
+.formGrid {
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 13px;
+  padding: 18px;
+}
+
+.formGrid input,
+.formGrid select,
+.flatSelect,
+.settingsCard input,
+.societySelect {
+  min-height: 43px;
+}
+
+.tableWrap {
+  border-radius: 22px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  box-shadow: var(--shadow-soft);
+  border-color: rgba(216, 225, 239, 0.95);
+  background: var(--card);
+}
+
+.tableWrap::-webkit-scrollbar,
+.navButtons::-webkit-scrollbar {
+  height: 8px;
+}
+
+.tableWrap::-webkit-scrollbar-thumb,
+.navButtons::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.35);
+  border-radius: 999px;
+}
+
+table {
+  min-width: 980px;
+  table-layout: auto;
+}
+
+th,
+td {
+  padding: 13px 15px;
+  white-space: nowrap;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
+th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  color: #475569;
+  background: linear-gradient(180deg, #f8fafc, #eef2f7);
+  letter-spacing: 0.01em;
+}
+
+.dark th {
+  color: #cbd5e1;
+  background: linear-gradient(180deg, #172033, #111827);
+}
+
+td {
+  color: var(--text);
+}
+
+/* Allow long notes/owner names to wrap neatly instead of breaking letter-by-letter. */
+td:nth-child(2),
+td:nth-child(4),
+td:nth-child(5),
+td:nth-child(6) {
+  max-width: 280px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+td button,
+.smallBtn,
+.reportLink {
+  min-height: 34px;
+  border-radius: 11px;
+  font-weight: 700;
+}
+
+button,
+.loginCard button,
+.ledgerHeader a,
+.reportLink {
+  font-weight: 700;
+  box-shadow: 0 6px 16px rgba(29, 78, 216, 0.16);
+}
+
+button:hover,
+.ledgerHeader a:hover,
+.reportLink:hover {
+  box-shadow: 0 10px 22px rgba(29, 78, 216, 0.20);
+}
+
+.status {
+  min-width: 74px;
+  padding: 7px 10px;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.ledgerHeader {
+  background:
+    linear-gradient(135deg, rgba(29, 78, 216, 0.08), transparent 46%),
+    var(--card);
+}
+
+.ledgerHeader h2 {
+  font-weight: 800;
+  letter-spacing: -0.45px;
+  overflow-wrap: normal;
+}
+
+.ledgerHeader p,
+.hintText,
+.paymentNote,
+.mutedText {
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.settingsGrid {
+  grid-template-columns: minmax(0, 1.08fr) minmax(300px, 0.72fr);
+}
+
+.loginCard {
+  max-width: 430px;
+}
+
+.loginLogoMain {
+  max-width: 100%;
+}
+
+@media (max-width: 900px) {
+  .main {
+    max-width: 100%;
+    padding: 16px;
+  }
+
+  .pageHeader {
+    padding: 16px;
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .sidebar {
+    border-right: 0;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.10);
+  }
+
+  .cards {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  }
+
+  table {
+    min-width: 920px;
+  }
+}
+
+@media (max-width: 520px) {
+  .main {
+    padding: 12px;
+  }
+
+  .pageHeader {
+    border-radius: 18px;
+    padding: 14px;
+  }
+
+  .cards {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .card {
+    padding: 13px;
+    border-radius: 17px;
+  }
+
+  .card b {
+    font-size: 18px;
+  }
+
+  .formGrid {
+    grid-template-columns: 1fr;
+    padding: 14px;
+  }
+
+  .tableWrap {
+    margin-inline: -2px;
+    border-radius: 16px;
+  }
+
+  th,
+  td {
+    padding: 11px 12px;
+  }
+
+  .sidebarBrand h2 {
+    font-size: 20px;
+    white-space: nowrap;
+  }
+
+  .ledgerHeader {
+    padding: 15px;
+    border-radius: 18px;
+  }
+}
+
+/* Mobile app-ready navigation + SocioLedger brand theme fix */
+:root {
+  --primary: #0f9f8f;
+  --primary-dark: #0b6f9c;
+  --brand-teal: #0f9f8f;
+  --brand-blue: #0b6f9c;
+  --brand-navy: #071427;
+  --sidebar: #071427;
+  --sidebar-active: rgba(15, 159, 143, 0.18);
+  --sidebar-soft: rgba(255, 255, 255, 0.075);
+}
+
+.loginPage {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(15, 159, 143, 0.32), transparent 30%),
+    radial-gradient(circle at 88% 10%, rgba(11, 111, 156, 0.30), transparent 26%),
+    linear-gradient(135deg, #071427, #0b2644 55%, #0f9f8f);
+}
+
+.sidebar {
+  background:
+    radial-gradient(circle at 12% 0%, rgba(15, 159, 143, 0.22), transparent 28%),
+    linear-gradient(180deg, #071427 0%, #0b1b33 55%, #071427 100%) !important;
+  width: 292px;
+}
+
+.sidebarBrand img,
+.mobileTopbarBrand img {
+  border-radius: 18px;
+  border: 1px solid rgba(15, 159, 143, 0.22);
+}
+
+.sidebarBrand h2,
+.sidebar h2,
+.mobileTopbarBrand span {
+  letter-spacing: -0.9px;
+}
+
+.sidebar button {
+  background: rgba(255, 255, 255, 0.075);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.sidebar button:hover,
+.sidebar .activeNav {
+  background: linear-gradient(135deg, rgba(15, 159, 143, 0.24), rgba(11, 111, 156, 0.18));
+  border-color: rgba(15, 159, 143, 0.25);
+}
+
+.sidebar .logout {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+}
+
+.mobileTopbar,
+.mobileNavBackdrop,
+.mobileCloseBtn {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .app {
+    flex-direction: column;
+    padding-top: 76px;
+  }
+
+  .mobileTopbar {
+    position: fixed;
+    inset: 0 0 auto 0;
+    height: 76px;
+    z-index: 140;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    background:
+      radial-gradient(circle at 16% 0%, rgba(15, 159, 143, 0.24), transparent 34%),
+      linear-gradient(135deg, #071427, #0b1b33);
+    box-shadow: 0 12px 28px rgba(7, 20, 39, 0.22);
+  }
+
+  .mobileMenuBtn {
+    display: inline-flex;
+    width: 46px !important;
+    min-width: 46px !important;
+    height: 46px;
+    min-height: 46px !important;
+    padding: 0 !important;
+    align-items: center;
+    justify-content: center;
+    border-radius: 15px;
+    background: rgba(255, 255, 255, 0.10) !important;
+    color: #ffffff;
+    font-size: 24px;
+    box-shadow: none;
+  }
+
+  .mobileTopbarBrand {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    color: #ffffff;
+    font-size: 22px;
+    font-weight: 900;
+  }
+
+  .mobileTopbarBrand img {
+    width: 44px;
+    height: 44px;
+    object-fit: contain;
+    background: #ffffff;
+    padding: 6px;
+    flex: 0 0 auto;
+  }
+
+  .mobileNavBackdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 150;
+    width: 100%;
+    min-height: 100vh;
+    border-radius: 0;
+    background: rgba(2, 6, 23, 0.48) !important;
+    backdrop-filter: blur(3px);
+    padding: 0;
+    box-shadow: none;
+  }
+
+  .sidebar {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0;
+    z-index: 160;
+    width: min(84vw, 320px) !important;
+    max-width: 320px;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    padding: 18px 14px 16px !important;
+    overflow-y: auto;
+    transform: translateX(-110%);
+    transition: transform 0.22s ease;
+    border-radius: 0 26px 26px 0;
+    box-shadow: 22px 0 50px rgba(2, 6, 23, 0.34) !important;
+  }
+
+  .sidebar.mobileOpen {
+    transform: translateX(0);
+  }
+
+  .mobileCloseBtn {
+    display: inline-flex !important;
+    position: absolute;
+    top: 14px;
+    right: 12px;
+    width: 38px !important;
+    height: 38px;
+    min-height: 38px !important;
+    min-width: 38px !important;
+    padding: 0 !important;
+    justify-content: center !important;
+    align-items: center !important;
+    border-radius: 999px !important;
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.10) !important;
+    font-size: 26px !important;
+    line-height: 1;
+    box-shadow: none !important;
+  }
+
+  .profileBox {
+    padding-right: 42px;
+  }
+
+  .sidebarBrand {
+    margin-bottom: 14px !important;
+  }
+
+  .sidebarBrand img {
+    width: 54px !important;
+    height: 54px !important;
+    min-width: 54px !important;
+  }
+
+  .sidebarBrand h2 {
+    font-size: 25px !important;
+    white-space: nowrap !important;
+  }
+
+  .sidebar p,
+  .role {
+    display: block !important;
+  }
+
+  .role {
+    width: fit-content;
+    margin-bottom: 10px;
+  }
+
+  .societySelect {
+    width: 100%;
+    margin: 12px 0 8px !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+    color: #ffffff !important;
+    border-color: rgba(255, 255, 255, 0.16) !important;
+  }
+
+  .societySelect option {
+    color: #111827;
+  }
+
+  .navButtons {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    overflow: visible !important;
+    gap: 9px !important;
+    padding-bottom: 0 !important;
+  }
+
+  .sidebar button {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 45px !important;
+    justify-content: flex-start !important;
+    padding: 11px 14px !important;
+    white-space: normal;
+    text-align: left;
+  }
+
+  .sidebar .modeBtn,
+  .sidebar .logout {
+    width: 100% !important;
+    min-width: 0 !important;
+    margin-top: 8px !important;
+  }
+
+  .main {
+    padding: 14px !important;
+  }
+
+  table {
+    min-width: 780px;
+  }
+}
+
+@media (max-width: 520px) {
+  .app {
+    padding-top: 70px;
+  }
+
+  .mobileTopbar {
+    height: 70px;
+    padding: 10px 12px;
+  }
+
+  .mobileTopbarBrand span {
+    font-size: 20px;
+  }
+
+  .mobileTopbarBrand img {
+    width: 40px;
+    height: 40px;
+  }
+
+  .main {
+    padding: 10px !important;
+  }
+
+  table {
+    min-width: 720px;
+  }
+
+  th,
+  td {
+    padding: 10px 12px !important;
+    font-size: 13px;
+  }
+
+  td:nth-child(2),
+  td:nth-child(4),
+  td:nth-child(5),
+  td:nth-child(6) {
+    max-width: 190px;
+  }
+}
+
+/* Login + resident profile production polish */
+.premiumLoginPage {
+  place-items: stretch;
+  padding: 28px;
+  background:
+    radial-gradient(circle at 8% 12%, rgba(18, 184, 166, 0.28), transparent 28%),
+    radial-gradient(circle at 88% 12%, rgba(37, 99, 235, 0.24), transparent 32%),
+    linear-gradient(135deg, #071427 0%, #0b2342 48%, #f5f8fc 48.2%, #eef5fb 100%);
+}
+
+.loginShell {
+  width: min(1120px, 100%);
+  min-height: calc(100vh - 56px);
+  margin: auto;
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  align-items: center;
+  gap: 28px;
+}
+
+.loginHeroPanel {
+  color: #ffffff;
+  padding: 34px;
+  border-radius: 34px;
+  background: rgba(7, 20, 39, 0.58);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  box-shadow: 0 30px 80px rgba(7, 20, 39, 0.32);
+  backdrop-filter: blur(18px);
+  overflow: hidden;
+}
+
+.loginLogoBadge {
+  width: 96px;
+  height: 96px;
+  border-radius: 28px;
+  background: #ffffff;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.22);
+  margin-bottom: 22px;
+}
+
+.loginLogoBadge img {
+  width: 78px;
+  height: 78px;
+  object-fit: contain;
+}
+
+.eyebrow {
+  color: #55d6c2 !important;
+  text-transform: uppercase;
+  letter-spacing: 1.8px;
+  font-weight: 800;
+  margin-bottom: 12px !important;
+}
+
+.loginHeroPanel h1 {
+  font-size: clamp(40px, 6vw, 70px);
+  line-height: 0.95;
+  letter-spacing: -2.4px;
+  margin: 0 0 18px;
+}
+
+.loginHeroText {
+  color: #dbeafe !important;
+  font-size: 17px !important;
+  max-width: 520px;
+  margin-bottom: 26px !important;
+}
+
+.loginFeatureGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.loginFeatureGrid span {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #f8fafc;
+  padding: 12px 13px;
+  border-radius: 16px;
+  font-weight: 700;
+}
+
+.premiumLoginCard {
+  max-width: 480px;
+  justify-self: center;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(20px);
+}
+
+.loginCardHeader {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.premiumLoginCard .loginLogoMain {
+  width: 78px;
+  height: 78px;
+  margin: 0;
+  border-radius: 22px;
+  box-shadow: 0 12px 25px rgba(15, 23, 42, 0.12);
+}
+
+.loginCardHeader h2 {
+  font-size: 30px;
+  line-height: 1.05;
+  margin: 0 0 5px;
+  color: #071427;
+  letter-spacing: -0.9px;
+}
+
+.fieldLabel {
+  display: block;
+  margin: 12px 0 -12px;
+  color: #334155;
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.loginPrimaryBtn {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 8px;
+  background: linear-gradient(135deg, #0f766e, #2563eb) !important;
+  box-shadow: 0 16px 28px rgba(37, 99, 235, 0.22);
+  font-weight: 800;
+}
+
+.resetBox {
+  margin-top: 18px;
+  padding: 15px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+}
+
+.resetBox b {
+  color: #0f172a;
+}
+
+.resetBox p {
+  margin-top: 4px !important;
+  font-size: 12px !important;
+}
+
+.resetInline {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.resetInline input {
+  margin: 0;
+}
+
+.resetInline button {
+  min-width: 92px;
+  background: #0f766e;
+}
+
+.resetInline button:disabled,
+.loginCard button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.loginFooter {
+  margin-top: 12px !important;
+  font-size: 12px !important;
+  color: #94a3b8 !important;
+  text-align: center;
+}
+
+.profileGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.profileCard {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 20px;
+  box-shadow: var(--shadow);
+  min-width: 0;
+}
+
+.ownerProfileCard {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.profileAvatar {
+  width: 74px;
+  height: 74px;
+  min-width: 74px;
+  border-radius: 24px;
+  display: grid;
+  place-items: center;
+  color: #ffffff;
+  background: linear-gradient(135deg, #0f766e, #2563eb);
+  font-size: 32px;
+  font-weight: 900;
+}
+
+.profileCard h2,
+.profileCard h3 {
+  margin: 0 0 12px;
+  letter-spacing: -0.4px;
+}
+
+.profileCard p {
+  color: var(--muted);
+  margin: 0 0 10px;
+}
+
+.profileRows {
+  display: grid;
+  gap: 10px;
+}
+
+.profileRows > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.profileRows > div:last-child {
+  border-bottom: 0;
+}
+
+.profileRows span {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.profileRows b {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.compactCards {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 820px) {
+  .premiumLoginPage {
+    padding: 18px;
+    background:
+      radial-gradient(circle at top, rgba(18, 184, 166, 0.25), transparent 36%),
+      linear-gradient(180deg, #071427 0%, #0b2342 38%, #f5f8fc 38.2%, #eef5fb 100%);
+  }
+
+  .loginShell {
+    min-height: calc(100vh - 36px);
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .loginHeroPanel {
+    padding: 20px;
+    border-radius: 26px;
+  }
+
+  .loginLogoBadge {
+    width: 72px;
+    height: 72px;
+    border-radius: 22px;
+    margin-bottom: 14px;
+  }
+
+  .loginLogoBadge img {
+    width: 58px;
+    height: 58px;
+  }
+
+  .loginHeroPanel h1 {
+    font-size: 42px;
+  }
+
+  .loginHeroText {
+    font-size: 14px !important;
+  }
+
+  .loginFeatureGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .premiumLoginCard {
+    max-width: none;
+    padding: 20px;
+    border-radius: 26px;
+  }
+
+  .loginCardHeader {
+    align-items: flex-start;
+  }
+
+  .premiumLoginCard .loginLogoMain {
+    width: 62px;
+    height: 62px;
+  }
+
+  .loginCardHeader h2 {
+    font-size: 24px;
+  }
+
+  .resetInline {
+    grid-template-columns: 1fr;
+  }
+
+  .resetInline button {
+    width: 100%;
+  }
+
+  .profileGrid,
+  .compactCards {
+    grid-template-columns: 1fr;
+  }
+
+  .ownerProfileCard {
+    align-items: flex-start;
+  }
+}
+
+/* App-style login redesign: StreetPaw-inspired, SocioLedger themed */
+.appLoginPage {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background:
+    radial-gradient(circle at 50% 26%, rgba(15, 159, 143, 0.18), transparent 24%),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 48%, #eef6fb 100%);
+  overflow-x: hidden;
+}
+
+.appLoginScreen {
+  position: relative;
+  width: min(430px, 100%);
+  min-height: min(920px, calc(100dvh - 40px));
+  margin: auto;
+  padding: 18px 22px 18px;
+  border-radius: 38px;
+  background:
+    radial-gradient(circle at 22% 16%, rgba(15, 159, 143, 0.12), transparent 24%),
+    radial-gradient(circle at 88% 8%, rgba(37, 99, 235, 0.10), transparent 26%),
+    #ffffff;
+  box-shadow: 0 32px 90px rgba(15, 23, 42, 0.18);
+  border: 1px solid rgba(226, 232, 240, 0.92);
+  overflow: hidden;
+}
+
+.appLoginScreen::before {
+  content: "";
+  position: absolute;
+  inset: 118px -80px auto -80px;
+  height: 240px;
+  background:
+    radial-gradient(circle at 16% 70%, rgba(15, 159, 143, 0.15), transparent 20%),
+    linear-gradient(135deg, rgba(7, 20, 39, 0.035), rgba(11, 111, 156, 0.10));
+  transform: rotate(-8deg);
+  pointer-events: none;
+}
+
+.appStatusBar,
+.appLoginHeader,
+.appHeroBlock,
+.appIllustrationCard,
+.appLoginActionCard,
+.appQuickGrid,
+.appLoginFooter {
+  position: relative;
+  z-index: 1;
+}
+
+.appStatusBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #071427;
+  font-weight: 900;
+  font-size: 15px;
+  margin: 0 4px 22px;
+  letter-spacing: -0.2px;
+}
+
+.appLoginHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.appMenuIcon,
+.appBellIcon {
+  width: 50px;
+  height: 50px;
+  border-radius: 17px;
+  border: 1px solid #e5edf5;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.08);
+  display: grid;
+  place-items: center;
+  color: #071427;
+}
+
+.appMenuIcon {
+  gap: 4px;
+}
+
+.appMenuIcon span {
+  display: block;
+  width: 21px;
+  height: 2px;
+  border-radius: 99px;
+  background: #071427;
+}
+
+.appBellIcon {
+  color: #0f9f8f;
+  font-size: 24px;
+}
+
+.appBrandLockup {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #071427;
+  text-align: left;
+}
+
+.appBrandLockup img {
+  width: 55px;
+  height: 55px;
+  object-fit: contain;
+  border-radius: 18px;
+  background: #ffffff;
+  padding: 8px;
+  border: 1px solid #e5edf5;
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.08);
+}
+
+.appBrandLockup strong {
+  display: block;
+  font-size: 27px;
+  line-height: 1;
+  font-weight: 950;
+  letter-spacing: -1px;
+}
+
+.appBrandLockup small {
+  display: block;
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 10px;
+  letter-spacing: 4px;
+  font-weight: 900;
+}
+
+.appHeroBlock {
+  margin-top: 34px;
+  text-align: center;
+}
+
+.appHeroBlock .eyebrow {
+  margin: 0 0 10px !important;
+  color: #0f9f8f !important;
+  font-size: 12px !important;
+  letter-spacing: 2.8px;
+}
+
+.appHeroBlock h1 {
+  margin: 0;
+  color: #071427;
+  font-size: clamp(42px, 10.5vw, 57px);
+  line-height: 0.96;
+  letter-spacing: -2.8px;
+  font-weight: 950;
+}
+
+.appHeroBlock h1 span {
+  color: #0f9f8f;
+}
+
+.appHeroBlock p {
+  max-width: 340px;
+  margin: 18px auto 0 !important;
+  color: #5b6b80 !important;
+  font-size: 15px !important;
+  line-height: 1.55;
+}
+
+.appIllustrationCard {
+  min-height: 155px;
+  margin: 18px 0 -6px;
+  display: grid;
+  place-items: end center;
+}
+
+.buildingArt {
+  position: relative;
+  width: 245px;
+  height: 135px;
+  border-radius: 30px 30px 0 0;
+  background: linear-gradient(135deg, #071427, #0b6f9c);
+  box-shadow: 0 22px 42px rgba(11, 111, 156, 0.20);
+  overflow: hidden;
+}
+
+.buildingArt::before {
+  content: "";
+  position: absolute;
+  inset: 18px 20px;
+  background:
+    linear-gradient(90deg, rgba(255,255,255,0.22) 8px, transparent 8px) 0 0 / 46px 38px,
+    linear-gradient(rgba(255,255,255,0.20) 8px, transparent 8px) 0 0 / 46px 38px;
+  opacity: 0.8;
+}
+
+.buildingArt span:nth-child(1),
+.buildingArt span:nth-child(2),
+.buildingArt span:nth-child(3) {
+  position: absolute;
+  bottom: 0;
+  width: 52px;
+  border-radius: 18px 18px 0 0;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.buildingArt span:nth-child(1) { left: 26px; height: 86px; }
+.buildingArt span:nth-child(2) { left: 96px; height: 112px; }
+.buildingArt span:nth-child(3) { right: 26px; height: 74px; }
+
+.floatingChip {
+  position: absolute;
+  padding: 10px 13px;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #071427;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.12);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.chipOne { left: 28px; bottom: 42px; color: #0f9f8f; }
+.chipTwo { right: 22px; bottom: 78px; color: #2563eb; }
+
+.appLoginActionCard.premiumLoginCard {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 18px;
+  border-radius: 30px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 20px 55px rgba(15, 23, 42, 0.13);
+  backdrop-filter: none;
+}
+
+.compactLoginHeader {
+  margin-bottom: 14px;
+  gap: 13px;
+}
+
+.appLoginActionCard .loginLogoMain {
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  padding: 7px;
+  background: #ffffff;
+}
+
+.appLoginActionCard .loginCardHeader h2 {
+  font-size: 25px;
+  letter-spacing: -0.7px;
+}
+
+.appLoginActionCard .loginCardHeader p {
+  font-size: 13px !important;
+  line-height: 1.35;
+}
+
+.appLoginActionCard .fieldLabel {
+  margin: 12px 0 7px;
+  font-size: 12px;
+  color: #0f172a;
+}
+
+.appLoginActionCard input {
+  width: 100%;
+  margin: 0 0 8px;
+  min-height: 48px;
+  border-radius: 17px;
+  background: #f3f8ff;
+  border: 1px solid #dbe7f3;
+  color: #071427;
+}
+
+.appLoginActionCard input:focus {
+  border-color: rgba(15, 159, 143, 0.45);
+  box-shadow: 0 0 0 4px rgba(15, 159, 143, 0.10);
+}
+
+.appLoginActionCard .loginPrimaryBtn {
+  min-height: 54px;
+  margin: 8px 0 0;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #0f9f8f 0%, #0b6f9c 52%, #2563eb 100%) !important;
+  box-shadow: 0 16px 32px rgba(15, 159, 143, 0.24);
+}
+
+.resetAccordion {
+  margin-top: 13px;
+  padding: 13px 14px;
+  border: 1px solid #e5edf5;
+  border-radius: 20px;
+  background: #fbfdff;
+}
+
+.resetAccordion summary {
+  cursor: pointer;
+  color: #071427;
+  font-weight: 900;
+  list-style-position: outside;
+}
+
+.resetAccordion p {
+  margin: 8px 0 10px !important;
+  font-size: 12px !important;
+  color: #64748b !important;
+}
+
+.resetAccordion .resetInline {
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.resetAccordion .resetInline input {
+  margin: 0;
+  min-height: 44px;
+}
+
+.resetAccordion .resetInline button {
+  min-width: 82px;
+  min-height: 44px;
+  border-radius: 15px;
+  background: #0f766e;
+}
+
+.appQuickGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.appQuickGrid div {
+  padding: 14px 16px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(15, 159, 143, 0.10), rgba(37, 99, 235, 0.08));
+  border: 1px solid #e2e8f0;
+}
+
+.appQuickGrid b,
+.appQuickGrid span {
+  display: block;
+}
+
+.appQuickGrid b {
+  color: #071427;
+  font-size: 15px;
+}
+
+.appQuickGrid span {
+  color: #64748b;
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.appLoginFooter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  color: #64748b;
+  font-size: 12px;
+  letter-spacing: 3px;
+  font-weight: 900;
+  margin-top: 18px;
+  padding-bottom: 3px;
+}
+
+.appLoginFooter b {
+  color: #0f9f8f;
+}
+
+.appLoginFooter span {
+  width: 38px;
+  height: 2px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, transparent, #0f9f8f);
+}
+
+.appLoginFooter span:last-child {
+  background: linear-gradient(90deg, #0f9f8f, transparent);
+}
+
+@media (min-width: 980px) {
+  .appLoginScreen {
+    transform: scale(0.96);
+  }
+}
+
+@media (max-width: 520px) {
+  .appLoginPage {
+    padding: 0;
+    place-items: stretch;
+    background: #ffffff;
+  }
+
+  .appLoginScreen {
+    width: 100%;
+    min-height: 100dvh;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 18px 22px max(18px, env(safe-area-inset-bottom));
+  }
+
+  .appStatusBar {
+    margin-bottom: 20px;
+  }
+
+  .appMenuIcon,
+  .appBellIcon {
+    width: 48px;
+    height: 48px;
+  }
+
+  .appBrandLockup {
+    gap: 9px;
+  }
+
+  .appBrandLockup img {
+    width: 48px;
+    height: 48px;
+  }
+
+  .appBrandLockup strong {
+    font-size: 22px;
+  }
+
+  .appBrandLockup small {
+    font-size: 9px;
+    letter-spacing: 3px;
+  }
+
+  .appHeroBlock {
+    margin-top: 28px;
+  }
+
+  .appHeroBlock h1 {
+    font-size: clamp(39px, 12vw, 52px);
+  }
+
+  .appIllustrationCard {
+    min-height: 136px;
+    margin-top: 14px;
+  }
+
+  .buildingArt {
+    width: 220px;
+    height: 120px;
+  }
+
+  .appLoginActionCard.premiumLoginCard {
+    border-radius: 28px;
+    padding: 17px;
+  }
+
+  .resetAccordion .resetInline {
+    grid-template-columns: 1fr;
+  }
+
+  .resetAccordion .resetInline button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 370px) {
+  .appLoginScreen {
+    padding-inline: 16px;
+  }
+
+  .appHeroBlock h1 {
+    font-size: 37px;
+  }
+
+  .appQuickGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Universal advance + mobile login fit hotfix */
+@media (max-width: 520px) {
+  .appLoginPage {
+    min-height: 100dvh;
+    overflow: hidden;
+  }
+
+  .appLoginScreen {
+    min-height: 100dvh;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow: hidden;
+    padding: 10px 16px max(10px, env(safe-area-inset-bottom));
+  }
+
+  .appStatusBar {
+    margin: 0 2px 4px;
+    font-size: 13px;
+    flex: 0 0 auto;
+  }
+
+  .appLoginHeader {
+    flex: 0 0 auto;
+    gap: 8px;
+  }
+
+  .appMenuIcon,
+  .appBellIcon {
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+  }
+
+  .appBrandLockup img {
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+    padding: 6px;
+  }
+
+  .appBrandLockup strong {
+    font-size: 20px;
+  }
+
+  .appBrandLockup small {
+    font-size: 8px;
+    letter-spacing: 2.4px;
+  }
+
+  .appHeroBlock {
+    margin-top: 8px;
+    flex: 0 0 auto;
+  }
+
+  .appHeroBlock .eyebrow {
+    margin-bottom: 5px !important;
+    font-size: 10px !important;
+    letter-spacing: 2px;
+  }
+
+  .appHeroBlock h1 {
+    font-size: clamp(29px, 9vw, 39px);
+    line-height: 0.98;
+    letter-spacing: -1.8px;
+  }
+
+  .appHeroBlock p {
+    max-width: 310px;
+    margin-top: 8px !important;
+    font-size: 12px !important;
+    line-height: 1.35;
+  }
+
+  .appIllustrationCard {
+    display: none;
+  }
+
+  .appLoginActionCard.premiumLoginCard {
+    margin-top: 2px;
+    padding: 13px;
+    border-radius: 24px;
+    box-shadow: 0 14px 35px rgba(15, 23, 42, 0.10);
+    flex: 0 1 auto;
+  }
+
+  .compactLoginHeader {
+    margin-bottom: 8px;
+    gap: 10px;
+  }
+
+  .appLoginActionCard .loginLogoMain {
+    width: 44px;
+    height: 44px;
+    border-radius: 15px;
+    padding: 6px;
+  }
+
+  .appLoginActionCard .loginCardHeader h2 {
+    font-size: 21px;
+    margin: 0;
+  }
+
+  .appLoginActionCard .loginCardHeader p {
+    font-size: 11px !important;
+    margin: 2px 0 0 !important;
+  }
+
+  .appLoginActionCard .fieldLabel {
+    margin: 8px 0 5px;
+    font-size: 11px;
+  }
+
+  .appLoginActionCard input {
+    min-height: 42px;
+    border-radius: 14px;
+    padding: 10px 12px;
+    font-size: 14px;
+    margin-bottom: 4px;
+  }
+
+  .appLoginActionCard .loginPrimaryBtn {
+    min-height: 46px;
+    border-radius: 15px;
+    margin-top: 6px;
+  }
+
+  .resetAccordion {
+    margin-top: 8px;
+    padding: 9px 11px;
+    border-radius: 16px;
+  }
+
+  .resetAccordion summary {
+    font-size: 12px;
+  }
+
+  .resetAccordion p {
+    margin: 5px 0 7px !important;
+    font-size: 11px !important;
+    line-height: 1.25;
+  }
+
+  .resetAccordion .resetInline {
+    grid-template-columns: 1fr auto;
+    gap: 7px;
+  }
+
+  .resetAccordion .resetInline input,
+  .resetAccordion .resetInline button {
+    min-height: 38px;
+    border-radius: 13px;
+  }
+
+  .resetAccordion .resetInline button {
+    width: auto;
+    min-width: 70px;
+    padding: 0 12px;
+  }
+
+  .appQuickGrid {
+    display: none;
+  }
+
+  .appLoginFooter {
+    margin-top: auto;
+    padding-bottom: 0;
+    font-size: 10px;
+    letter-spacing: 2px;
+    gap: 7px;
+    flex: 0 0 auto;
+  }
+
+  .appLoginFooter span {
+    width: 26px;
+  }
+}
+
+@media (max-width: 520px) and (max-height: 720px) {
+  .appHeroBlock p {
+    display: none;
+  }
+
+  .appLoginScreen {
+    gap: 7px;
+    padding-top: 8px;
+  }
+
+  .appHeroBlock h1 {
+    font-size: clamp(26px, 8vw, 34px);
+  }
+
+  .appLoginActionCard.premiumLoginCard {
+    padding: 11px;
+  }
+}
