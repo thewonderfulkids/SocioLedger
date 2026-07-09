@@ -2865,3 +2865,1542 @@ button:hover,
     padding: 11px;
   }
 }
+
+/* SocioLedger Login V2 - true mobile app style, single-screen first */
+.appLoginV2Page {
+  min-height: 100dvh;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 18%, rgba(35, 118, 255, 0.24), transparent 24%),
+    linear-gradient(180deg, #06152a 0%, #071b35 43%, #03101f 100%);
+}
+
+.appLoginV2Page::before,
+.appLoginV2Page::after {
+  content: "";
+  position: fixed;
+  inset: auto 0 0;
+  height: 34%;
+  pointer-events: none;
+  opacity: 0.28;
+  background:
+    linear-gradient(100deg, transparent 0 4%, rgba(255,255,255,0.08) 4% 6%, transparent 6% 10%) 0 100% / 110px 135px repeat-x,
+    linear-gradient(180deg, transparent, rgba(12, 213, 194, 0.16));
+}
+
+.appLoginV2Page::after {
+  inset: 12% 0 auto;
+  height: 22%;
+  opacity: 0.18;
+  background:
+    linear-gradient(90deg, rgba(255,255,255,0.10) 8px, transparent 8px) 10px 0 / 62px 44px repeat-x,
+    linear-gradient(180deg, rgba(255,255,255,0.05), transparent);
+  filter: blur(0.2px);
+}
+
+.appLoginV2Screen {
+  position: relative;
+  z-index: 1;
+  width: min(430px, 100vw);
+  height: min(920px, 100dvh);
+  min-height: 100dvh;
+  padding: 20px 35px max(18px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  color: #ffffff;
+  overflow: hidden;
+}
+
+.appV2StatusBar {
+  margin: 0 0 18px;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 950;
+  text-shadow: 0 1px 12px rgba(0,0,0,0.35);
+  flex: 0 0 auto;
+}
+
+.appV2BrandHero {
+  text-align: center;
+  flex: 0 0 auto;
+}
+
+.appV2Logo {
+  width: 92px;
+  height: 92px;
+  object-fit: contain;
+  border-radius: 26px;
+  margin: 0 auto 10px;
+  padding: 12px;
+  background: rgba(255,255,255,0.96);
+  box-shadow: 0 24px 55px rgba(10, 205, 190, 0.18), 0 8px 24px rgba(0,0,0,0.25);
+}
+
+.appV2BrandHero h1 {
+  margin: 0;
+  font-size: clamp(39px, 9.2vw, 50px);
+  line-height: 0.98;
+  font-weight: 950;
+  letter-spacing: -1.9px;
+  color: #f8fbff;
+  text-shadow: 0 14px 34px rgba(0,0,0,0.35);
+}
+
+.appV2BrandHero h1 span {
+  color: #2fd6b7;
+}
+
+.appV2Divider {
+  display: grid;
+  grid-template-columns: 1fr 38px 1fr;
+  align-items: center;
+  gap: 12px;
+  width: 205px;
+  margin: 15px auto 9px;
+}
+
+.appV2Divider span {
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #22d3c5);
+  border-radius: 99px;
+}
+
+.appV2Divider span:last-child {
+  background: linear-gradient(90deg, #22d3c5, transparent);
+}
+
+.appV2Divider b {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 2px solid rgba(45, 212, 191, 0.95);
+  color: #2fd6b7;
+  box-shadow: 0 0 28px rgba(45, 212, 191, 0.28);
+}
+
+.appV2BrandHero p {
+  margin: 0 !important;
+  color: #c7d9ee !important;
+  font-size: 18px !important;
+  letter-spacing: 0.1px;
+}
+
+.appV2LoginCard.premiumLoginCard {
+  width: 100%;
+  margin: 24px 0 0;
+  padding: 26px;
+  border-radius: 32px;
+  background: linear-gradient(180deg, rgba(8, 25, 48, 0.90), rgba(5, 18, 34, 0.94));
+  border: 1px solid rgba(47, 214, 183, 0.64);
+  box-shadow:
+    0 0 0 1px rgba(37, 99, 235, 0.42),
+    0 30px 80px rgba(0,0,0,0.34),
+    inset 0 1px 0 rgba(255,255,255,0.08);
+  backdrop-filter: blur(14px);
+  flex: 0 1 auto;
+}
+
+.appV2CardTitle {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 22px;
+}
+
+.appV2UserIcon {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #ffffff;
+  font-size: 46px;
+  line-height: 1;
+  background: radial-gradient(circle at 35% 28%, #39e6c8, #0f766e 58%, rgba(15, 118, 110, 0.25));
+  box-shadow: 0 16px 35px rgba(45, 212, 191, 0.20);
+}
+
+.appV2CardTitle h2 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 32px;
+  line-height: 1.05;
+  font-weight: 950;
+  letter-spacing: -1.2px;
+}
+
+.appV2CardTitle p {
+  margin: 7px 0 0 !important;
+  color: #b7c8dc !important;
+  font-size: 15px !important;
+}
+
+.appV2LoginCard .fieldLabel {
+  display: block;
+  margin: 16px 0 9px;
+  color: #f8fbff;
+  font-size: 14px;
+  font-weight: 850;
+  letter-spacing: 0.1px;
+}
+
+.appV2InputShell {
+  min-height: 62px;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  border-radius: 18px;
+  background: rgba(7, 20, 39, 0.72);
+  padding: 0 16px;
+  color: #ffffff;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+.appV2InputShell:focus-within {
+  border-color: rgba(45, 212, 191, 0.88);
+  box-shadow: 0 0 0 4px rgba(45, 212, 191, 0.13), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+
+.appV2InputShell span {
+  color: #2fd6b7;
+  font-size: 25px;
+  flex: 0 0 auto;
+}
+
+.appV2InputShell b {
+  padding-right: 8px;
+  border-right: 1px solid rgba(148, 163, 184, 0.35);
+  font-size: 18px;
+}
+
+.appV2InputShell input,
+.appV2InputShell input:focus {
+  min-height: auto !important;
+  height: 56px !important;
+  flex: 1;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #ffffff !important;
+  font-size: 18px;
+  border-radius: 0 !important;
+}
+
+.appV2InputShell input::placeholder {
+  color: rgba(199, 217, 238, 0.55);
+}
+
+.appV2LoginMeta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0 18px;
+  color: #dbeafe;
+  font-size: 14px;
+}
+
+.appV2LoginMeta label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.appV2LoginMeta input {
+  width: 18px !important;
+  height: 18px !important;
+  accent-color: #2fd6b7;
+}
+
+.appV2LoginMeta button {
+  padding: 0;
+  min-height: auto;
+  color: #38bdf8;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  font-weight: 800;
+}
+
+.appV2LoginBtn.loginPrimaryBtn {
+  min-height: 58px;
+  width: 100%;
+  margin: 0;
+  border-radius: 17px;
+  background: linear-gradient(135deg, #2fd6b7 0%, #0ea5e9 52%, #2563eb 100%) !important;
+  box-shadow: 0 18px 36px rgba(14, 165, 233, 0.24), 0 8px 20px rgba(45, 212, 191, 0.12);
+  font-size: 18px;
+  font-weight: 950;
+}
+
+.appV2ResetAccordion {
+  margin-top: 12px;
+  padding: 11px 13px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.045);
+  border: 1px solid rgba(148,163,184,0.26);
+}
+
+.appV2ResetAccordion summary {
+  color: #dbeafe;
+  font-size: 13px;
+}
+
+.appV2ResetAccordion p {
+  color: #a9bdd4 !important;
+}
+
+.appV2ResetAccordion .resetInline input {
+  background: rgba(255,255,255,0.08) !important;
+  color: #ffffff !important;
+  border-color: rgba(148,163,184,0.26) !important;
+}
+
+.appV2TrustLine {
+  display: flex;
+  justify-content: center;
+  gap: 11px;
+  margin-top: 18px;
+  color: #c7d9ee;
+  font-size: 14px;
+}
+
+.appV2TrustLine span {
+  color: #2fd6b7;
+}
+
+.appV2Security {
+  margin: auto 0 13px !important;
+  text-align: center;
+  color: #c7d9ee !important;
+  font-size: 14px !important;
+}
+
+.appV2Footer {
+  flex: 0 0 auto;
+  margin: 0;
+  color: #c7d9ee;
+  letter-spacing: 2.5px;
+}
+
+.appV2Footer b {
+  color: #2fd6b7;
+}
+
+@media (min-width: 700px) {
+  .appLoginV2Page {
+    padding: 22px;
+  }
+
+  .appLoginV2Screen {
+    min-height: min(920px, calc(100dvh - 44px));
+    border-radius: 38px;
+    box-shadow: 0 36px 100px rgba(0,0,0,0.34);
+  }
+}
+
+@media (max-width: 520px) {
+  .appLoginV2Screen {
+    width: 100vw;
+    height: 100dvh;
+    min-height: 100dvh;
+    padding: 16px 28px max(14px, env(safe-area-inset-bottom));
+  }
+
+  .appV2StatusBar {
+    margin-bottom: 12px;
+    font-size: 15px;
+  }
+
+  .appV2Logo {
+    width: 76px;
+    height: 76px;
+    border-radius: 22px;
+    margin-bottom: 7px;
+  }
+
+  .appV2BrandHero h1 {
+    font-size: clamp(34px, 10vw, 43px);
+  }
+
+  .appV2Divider {
+    width: 180px;
+    margin: 10px auto 7px;
+  }
+
+  .appV2Divider b {
+    width: 32px;
+    height: 32px;
+  }
+
+  .appV2BrandHero p {
+    font-size: 15px !important;
+  }
+
+  .appV2LoginCard.premiumLoginCard {
+    margin-top: 17px;
+    padding: 20px;
+    border-radius: 28px;
+  }
+
+  .appV2CardTitle {
+    gap: 13px;
+    margin-bottom: 16px;
+  }
+
+  .appV2UserIcon {
+    width: 56px;
+    height: 56px;
+    font-size: 36px;
+  }
+
+  .appV2CardTitle h2 {
+    font-size: 26px;
+  }
+
+  .appV2CardTitle p {
+    font-size: 13px !important;
+  }
+
+  .appV2LoginCard .fieldLabel {
+    margin: 12px 0 7px;
+    font-size: 13px;
+  }
+
+  .appV2InputShell {
+    min-height: 54px;
+    border-radius: 16px;
+    padding-inline: 14px;
+  }
+
+  .appV2InputShell input,
+  .appV2InputShell input:focus {
+    height: 50px !important;
+    font-size: 16px;
+  }
+
+  .appV2LoginMeta {
+    margin: 13px 0 15px;
+    font-size: 13px;
+  }
+
+  .appV2LoginBtn.loginPrimaryBtn {
+    min-height: 52px;
+    font-size: 16px;
+  }
+
+  .appV2TrustLine {
+    margin-top: 12px;
+    font-size: 13px;
+  }
+
+  .appV2Security {
+    font-size: 12px !important;
+    margin-bottom: 10px !important;
+  }
+}
+
+@media (max-width: 390px), (max-height: 760px) {
+  .appLoginV2Screen {
+    padding: 10px 22px max(10px, env(safe-area-inset-bottom));
+  }
+
+  .appV2StatusBar {
+    margin-bottom: 7px;
+    font-size: 13px;
+  }
+
+  .appV2Logo {
+    width: 60px;
+    height: 60px;
+    border-radius: 18px;
+    padding: 8px;
+    margin-bottom: 5px;
+  }
+
+  .appV2BrandHero h1 {
+    font-size: clamp(29px, 9vw, 36px);
+    letter-spacing: -1.4px;
+  }
+
+  .appV2Divider {
+    margin: 7px auto 5px;
+  }
+
+  .appV2Divider b {
+    width: 27px;
+    height: 27px;
+    font-size: 12px;
+  }
+
+  .appV2BrandHero p {
+    font-size: 13px !important;
+  }
+
+  .appV2LoginCard.premiumLoginCard {
+    margin-top: 12px;
+    padding: 16px;
+    border-radius: 24px;
+  }
+
+  .appV2CardTitle {
+    margin-bottom: 10px;
+  }
+
+  .appV2UserIcon {
+    width: 48px;
+    height: 48px;
+    font-size: 30px;
+  }
+
+  .appV2CardTitle h2 {
+    font-size: 22px;
+  }
+
+  .appV2CardTitle p {
+    font-size: 12px !important;
+    margin-top: 3px !important;
+  }
+
+  .appV2LoginCard .fieldLabel {
+    margin: 9px 0 5px;
+    font-size: 12px;
+  }
+
+  .appV2InputShell {
+    min-height: 46px;
+    border-radius: 14px;
+  }
+
+  .appV2InputShell span {
+    font-size: 20px;
+  }
+
+  .appV2InputShell b {
+    font-size: 15px;
+  }
+
+  .appV2InputShell input,
+  .appV2InputShell input:focus {
+    height: 44px !important;
+    font-size: 15px;
+  }
+
+  .appV2LoginMeta {
+    margin: 10px 0 12px;
+    font-size: 12px;
+  }
+
+  .appV2LoginBtn.loginPrimaryBtn {
+    min-height: 47px;
+  }
+
+  .appV2ResetAccordion {
+    margin-top: 9px;
+    padding: 8px 10px;
+  }
+
+  .appV2ResetAccordion summary {
+    font-size: 12px;
+  }
+
+  .appV2ResetAccordion p,
+  .appV2ResetAccordion .resetInline {
+    display: none;
+  }
+
+  .appV2TrustLine {
+    margin-top: 9px;
+    font-size: 12px;
+  }
+
+  .appV2Security {
+    display: none;
+  }
+
+  .appV2Footer {
+    font-size: 9px;
+    letter-spacing: 1.8px;
+  }
+}
+
+
+/* Login V2 status/reset micro-fix */
+.appLoginV2Screen {
+  padding-top: max(18px, env(safe-area-inset-top));
+}
+
+.appV2BrandHero {
+  padding-top: 2px;
+}
+
+.appV2ResetAccordion {
+  cursor: default;
+}
+
+.appV2ResetAccordion summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  cursor: pointer;
+  user-select: none;
+}
+
+.appV2ResetAccordion summary::-webkit-details-marker {
+  display: none;
+}
+
+.appV2ResetAccordion summary span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.appV2ResetAccordion summary span::before {
+  content: "↻";
+  width: 22px;
+  height: 22px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 9px;
+  color: #071427;
+  background: linear-gradient(135deg, #2fd6b7, #38bdf8);
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.appV2ResetAccordion summary b {
+  width: 26px;
+  height: 26px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 10px;
+  color: #ffffff;
+  background: rgba(255,255,255,0.10);
+  border: 1px solid rgba(148,163,184,0.24);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.appV2ResetAccordion[open] {
+  background: rgba(255,255,255,0.065);
+  border-color: rgba(45, 212, 191, 0.34);
+}
+
+.appV2ResetAccordion .resetInline {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.appV2ResetAccordion .resetInline button {
+  min-height: 46px;
+  border-radius: 14px;
+  padding: 0 18px;
+  white-space: nowrap;
+  background: linear-gradient(135deg, #0f766e, #2563eb);
+}
+
+@media (max-width: 390px), (max-height: 760px) {
+  .appV2ResetAccordion p {
+    display: block !important;
+    margin: 8px 0 0 !important;
+    font-size: 11px !important;
+  }
+
+  .appV2ResetAccordion:not([open]) p,
+  .appV2ResetAccordion:not([open]) .resetInline {
+    display: none !important;
+  }
+
+  .appV2ResetAccordion[open] .resetInline {
+    display: grid !important;
+    grid-template-columns: 1fr;
+  }
+
+  .appV2ResetAccordion[open] .resetInline button {
+    width: 100%;
+  }
+}
+
+/* Login V2 reset visibility fix */
+.appLoginV2Page {
+  overflow-x: hidden;
+  overflow-y: auto;
+  place-items: start center;
+}
+
+.appLoginV2Screen {
+  height: auto;
+  min-height: 100dvh;
+  overflow: visible;
+}
+
+.appV2LoginCard.premiumLoginCard {
+  flex: 0 0 auto;
+}
+
+.appV2ResetAccordion[open] {
+  padding-bottom: 14px;
+}
+
+.appV2ResetAccordion .resetInline {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.appV2ResetAccordion .resetInline input {
+  min-width: 0;
+  width: 100%;
+  height: 48px !important;
+  min-height: 48px !important;
+  margin: 0 !important;
+  border-radius: 15px !important;
+}
+
+.appV2ResetAccordion .resetInline button {
+  width: auto;
+  min-width: 96px;
+  height: 48px;
+  min-height: 48px;
+  margin: 0;
+  padding: 0 18px;
+  border-radius: 15px;
+  white-space: nowrap;
+}
+
+@media (min-width: 700px) {
+  .appLoginV2Screen {
+    height: auto;
+    min-height: min(920px, calc(100dvh - 44px));
+    overflow: visible;
+  }
+}
+
+@media (min-width: 700px) and (max-height: 820px) {
+  .appLoginV2Screen {
+    padding-top: 12px;
+    padding-bottom: 14px;
+  }
+
+  .appV2Logo {
+    width: 70px;
+    height: 70px;
+    margin-bottom: 6px;
+  }
+
+  .appV2BrandHero h1 {
+    font-size: 38px;
+  }
+
+  .appV2Divider {
+    margin: 8px auto 5px;
+  }
+
+  .appV2BrandHero p {
+    font-size: 14px !important;
+  }
+
+  .appV2LoginCard.premiumLoginCard {
+    margin-top: 14px;
+    padding: 18px;
+  }
+
+  .appV2CardTitle {
+    margin-bottom: 12px;
+  }
+
+  .appV2UserIcon {
+    width: 54px;
+    height: 54px;
+    font-size: 34px;
+  }
+
+  .appV2CardTitle h2 {
+    font-size: 25px;
+  }
+
+  .appV2CardTitle p {
+    margin-top: 3px !important;
+  }
+
+  .appV2LoginCard .fieldLabel {
+    margin: 10px 0 6px;
+  }
+
+  .appV2InputShell {
+    min-height: 50px;
+  }
+
+  .appV2InputShell input,
+  .appV2InputShell input:focus {
+    height: 46px !important;
+  }
+
+  .appV2LoginMeta {
+    margin: 11px 0 12px;
+  }
+
+  .appV2LoginBtn.loginPrimaryBtn {
+    min-height: 50px;
+  }
+
+  .appV2TrustLine,
+  .appV2Security,
+  .appV2Footer {
+    display: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .appV2ResetAccordion .resetInline {
+    grid-template-columns: 1fr;
+  }
+
+  .appV2ResetAccordion .resetInline button {
+    width: 100%;
+  }
+}
+
+/* Auth UID fallback + login password visibility patch */
+.passwordInputShell {
+  position: relative;
+}
+
+.passwordInputShell input {
+  padding-right: 56px !important;
+}
+
+.passwordEyeBtn {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #dbeafe;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 1;
+  z-index: 2;
+}
+
+.passwordEyeBtn:hover,
+.passwordEyeBtn:focus-visible {
+  background: rgba(45, 212, 191, 0.16);
+  outline: 1px solid rgba(45, 212, 191, 0.42);
+}
+
+/* Dashboard promotional panel - SocioLedger + VIORA */
+.dashboardPromoPanel {
+  margin-top: 28px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 28px;
+  align-items: stretch;
+  position: relative;
+  padding: 28px;
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 10% 10%, rgba(33, 201, 184, 0.12), transparent 34%),
+    radial-gradient(circle at 86% 24%, rgba(119, 77, 255, 0.12), transparent 36%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(247, 251, 255, 0.94));
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  box-shadow: 0 22px 70px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+
+.dashboardPromoPanel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(90deg, rgba(15, 23, 42, 0.045) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.035) 1px, transparent 1px);
+  background-size: 54px 54px;
+  mask-image: linear-gradient(90deg, transparent, black 18%, black 82%, transparent);
+}
+
+.promoProduct {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 22px;
+  align-items: center;
+  min-width: 0;
+  padding: 22px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(226, 232, 240, 0.82);
+}
+
+.promoLogoWrap {
+  width: 110px;
+  height: 110px;
+  border-radius: 28px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(145deg, rgba(240, 253, 250, 0.95), rgba(219, 234, 254, 0.7));
+  box-shadow: 0 18px 34px rgba(13, 148, 136, 0.14);
+  overflow: hidden;
+}
+
+.promoLogoWrap img {
+  width: 92px;
+  height: 92px;
+  object-fit: cover;
+  border-radius: 23px;
+  display: block;
+}
+
+.vioraLogoWrap {
+  background: linear-gradient(145deg, rgba(236, 253, 245, 0.95), rgba(220, 252, 231, 0.82));
+  box-shadow: 0 18px 34px rgba(22, 101, 52, 0.16);
+}
+
+.promoCopy {
+  min-width: 0;
+}
+
+.promoEyebrow {
+  display: inline-flex;
+  margin-bottom: 7px;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: #0f766e;
+}
+
+.promoCopy h2 {
+  margin: 0 0 8px;
+  font-size: clamp(1.65rem, 2.4vw, 2.45rem);
+  line-height: 1;
+  color: #07162f;
+  letter-spacing: -0.05em;
+}
+
+.promoViora .promoCopy h2 {
+  color: #4c1d95;
+  letter-spacing: 0.02em;
+}
+
+.promoCopy p {
+  margin: 0;
+  color: #53627a;
+  font-size: 0.98rem;
+  line-height: 1.55;
+  max-width: 48ch;
+}
+
+.promoChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 16px;
+}
+
+.promoChips span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #0f3d56;
+  background: rgba(224, 242, 254, 0.78);
+  border: 1px solid rgba(125, 211, 252, 0.48);
+  white-space: nowrap;
+}
+
+.promoViora .promoChips span {
+  color: #4c1d95;
+  background: rgba(237, 233, 254, 0.82);
+  border-color: rgba(196, 181, 253, 0.62);
+}
+
+.promoDivider {
+  position: relative;
+  z-index: 1;
+  width: 1px;
+  min-height: 180px;
+  align-self: center;
+  background: linear-gradient(transparent, rgba(148, 163, 184, 0.75), transparent);
+}
+
+.promoFooter {
+  grid-column: 1 / -1;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(226, 232, 240, 0.9);
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.promoFooter b {
+  color: #0f766e;
+}
+
+.dark .dashboardPromoPanel {
+  background:
+    radial-gradient(circle at 10% 10%, rgba(45, 212, 191, 0.14), transparent 34%),
+    radial-gradient(circle at 86% 24%, rgba(139, 92, 246, 0.16), transparent 36%),
+    linear-gradient(135deg, rgba(8, 21, 42, 0.98), rgba(13, 31, 55, 0.96));
+  border-color: rgba(45, 212, 191, 0.18);
+}
+
+.dark .promoProduct {
+  background: rgba(15, 23, 42, 0.72);
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+.dark .promoCopy h2 { color: #f8fafc; }
+.dark .promoViora .promoCopy h2 { color: #d8b4fe; }
+.dark .promoCopy p { color: #cbd5e1; }
+.dark .promoFooter { border-top-color: rgba(148, 163, 184, 0.18); color: #cbd5e1; }
+
+@media (max-width: 980px) {
+  .dashboardPromoPanel {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding: 18px;
+    border-radius: 24px;
+  }
+
+  .promoDivider {
+    width: 100%;
+    height: 1px;
+    min-height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.65), transparent);
+  }
+
+  .promoProduct {
+    grid-template-columns: 86px minmax(0, 1fr);
+    gap: 14px;
+    padding: 16px;
+  }
+
+  .promoLogoWrap {
+    width: 86px;
+    height: 86px;
+    border-radius: 22px;
+  }
+
+  .promoLogoWrap img {
+    width: 72px;
+    height: 72px;
+    border-radius: 18px;
+  }
+
+  .promoFooter {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 560px) {
+  .dashboardPromoPanel {
+    margin-top: 18px;
+    padding: 14px;
+  }
+
+  .promoProduct {
+    grid-template-columns: 1fr;
+    text-align: left;
+  }
+
+  .promoLogoWrap {
+    width: 74px;
+    height: 74px;
+  }
+
+  .promoLogoWrap img {
+    width: 62px;
+    height: 62px;
+    border-radius: 16px;
+  }
+
+  .promoCopy h2 {
+    font-size: 1.55rem;
+  }
+
+  .promoCopy p {
+    font-size: 0.9rem;
+  }
+}
+
+/* Final mobile navigation + corporate table/dashboard fixes */
+.mobileTopbar { display: none !important; }
+.mobileCloseBtn {
+  width: 38px !important;
+  height: 38px !important;
+  min-width: 38px !important;
+  border-radius: 14px !important;
+  background: rgba(255,255,255,0.12) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255,255,255,0.22) !important;
+  font-size: 22px !important;
+  line-height: 1 !important;
+  padding: 0 !important;
+  display: none !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: absolute !important;
+  top: 14px !important;
+  right: 14px !important;
+  z-index: 5 !important;
+}
+
+.dashboardToolbar,
+.expenseControlPanel,
+.expenseInsightPanel {
+  background: rgba(255,255,255,0.82);
+  border: 1px solid rgba(203,213,225,0.72);
+  border-radius: 22px;
+  box-shadow: 0 12px 32px rgba(15,23,42,0.07);
+}
+
+.dashboardToolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+.dashboardToolbar > div { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.dashboardToolbar span,
+.monthFilterBox label {
+  font-size: 12px;
+  font-weight: 900;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.dashboardToolbar input,
+.monthFilterBox input {
+  border: 1px solid #dbe3ef;
+  background: #fff;
+  border-radius: 14px;
+  padding: 10px 12px;
+  color: #0f172a;
+}
+.ghostBtn {
+  background: #f8fafc !important;
+  color: #0f766e !important;
+  border: 1px solid #99f6e4 !important;
+  box-shadow: none !important;
+}
+.expenseInsightPanel { padding: 18px; margin: 18px 0; }
+.sectionTitleRow { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:14px; }
+.sectionTitleRow h2 { margin:0; font-size:22px; line-height:1.1; letter-spacing:-.04em; }
+.sectionTitleRow p { margin:5px 0 0; color:#64748b; }
+.sectionTitleRow > b { color:#dc2626; font-size:22px; white-space:nowrap; }
+.expenseCategoryGrid { display:grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap:12px; }
+.expenseCategoryCard {
+  background: linear-gradient(135deg, #ffffff, #f0fdfa) !important;
+  color:#0f172a !important;
+  border:1px solid #d7f6ef !important;
+  border-radius:18px !important;
+  min-height:78px;
+  padding:14px !important;
+  align-items:flex-start !important;
+  flex-direction:column;
+  box-shadow:0 10px 24px rgba(15,118,110,.08);
+}
+.expenseCategoryCard span { color:#64748b; font-weight:800; font-size:13px; }
+.expenseCategoryCard b { color:#0f766e; font-size:22px; margin-top:6px; }
+.emptyMini { padding:14px; color:#64748b; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:16px; }
+
+.expenseControlPanel {
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+  padding:14px;
+  margin-bottom:16px;
+}
+.monthFilterBox { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-right:4px; }
+.filterPill {
+  background:#f8fafc !important;
+  color:#334155 !important;
+  border:1px solid #e2e8f0 !important;
+  border-radius:999px !important;
+  padding:10px 13px !important;
+  box-shadow:none !important;
+}
+.filterPill.active {
+  background:linear-gradient(135deg,#14b8a6,#2563eb) !important;
+  color:#fff !important;
+  border-color:transparent !important;
+}
+.expenseFormGrid { margin-bottom:18px; }
+.overdueRow td { color:#b91c1c; font-weight:800; }
+
+@media (max-width: 900px) {
+  .mobileTopbar {
+    display: flex !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 50 !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    height: 68px !important;
+    padding: 10px 14px !important;
+    background: linear-gradient(135deg, #071427, #0f766e) !important;
+    color: #ffffff !important;
+    border-bottom: 1px solid rgba(255,255,255,0.14) !important;
+    box-shadow: 0 10px 28px rgba(15,23,42,0.16) !important;
+  }
+  .mobileMenuBtn {
+    width: 46px !important;
+    height: 46px !important;
+    min-width: 46px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 16px !important;
+    background: rgba(255,255,255,.12) !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(255,255,255,.22) !important;
+    font-size: 24px !important;
+    padding: 0 !important;
+  }
+  .mobileTopbarBrand { color:#ffffff !important; min-width:0; }
+  .mobileTopbarBrand span { color:#ffffff !important; opacity:1 !important; font-weight:900 !important; text-shadow:0 1px 8px rgba(0,0,0,.22); }
+  .mobileTopbarBrand img { background:#fff !important; border:1px solid rgba(45,212,191,.45) !important; }
+  .sidebar.mobileOpen .mobileCloseBtn { display: inline-flex !important; }
+  .sidebar.mobileOpen { padding-top: 64px !important; }
+  .sidebar.mobileOpen .sidebarBrand { padding-right: 38px; }
+
+  .main { padding-top: 14px !important; }
+  .pageHeader { padding: 18px !important; border-radius: 22px !important; }
+  .pageHeader h1 { font-size: 26px !important; line-height:1.05 !important; }
+  .pageHeader p { font-size: 14px !important; line-height:1.35 !important; }
+  .dashboardToolbar { align-items: stretch; flex-direction: column; }
+  .dashboardToolbar > div { justify-content: space-between; }
+  .dashboardToolbar input, .dashboardToolbar .ghostBtn { width: 100%; }
+
+  .mobileCardTable { overflow: visible !important; background: transparent !important; border: none !important; box-shadow: none !important; }
+  .mobileCardTable table,
+  .mobileCardTable thead,
+  .mobileCardTable tbody,
+  .mobileCardTable tr,
+  .mobileCardTable th,
+  .mobileCardTable td { display: block !important; width: 100% !important; }
+  .mobileCardTable thead { display: none !important; }
+  .mobileCardTable tbody { display: grid !important; gap: 12px !important; }
+  .mobileCardTable tr {
+    background: rgba(255,255,255,0.94) !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 18px !important;
+    box-shadow: 0 12px 26px rgba(15,23,42,.06) !important;
+    padding: 10px 12px !important;
+    overflow: hidden !important;
+  }
+  .mobileCardTable tr.overdueRow { background: #fff7f7 !important; border-color:#fecdd3 !important; }
+  .mobileCardTable td {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 12px !important;
+    padding: 9px 2px !important;
+    border: none !important;
+    border-bottom: 1px solid #edf2f7 !important;
+    white-space: normal !important;
+    word-break: break-word !important;
+    text-align: right !important;
+    font-size: 14px !important;
+  }
+  .mobileCardTable td:last-child { border-bottom: 0 !important; }
+  .mobileCardTable td::before {
+    content: attr(data-label);
+    flex: 0 0 42%;
+    text-align: left;
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+  }
+  .mobileCardTable .status { min-width: 92px; justify-content:center; }
+
+  .expenseControlPanel { align-items: stretch; }
+  .monthFilterBox { width: 100%; justify-content: space-between; }
+  .monthFilterBox input { flex:1; min-width:160px; }
+  .filterPill { flex: 1 1 auto; }
+}
+
+@media (max-width: 560px) {
+  .sectionTitleRow { flex-direction: column; }
+  .expenseCategoryGrid { grid-template-columns: 1fr 1fr; }
+  .expenseCategoryCard { min-height:72px; padding:12px !important; }
+  .expenseCategoryCard b { font-size:18px; }
+}
+
+/* Mobile Premium Fix v2: no blank header, compact tables (no card conversion) */
+@media (max-width: 900px) {
+  html, body, #root { overflow-x: hidden !important; }
+
+  .app {
+    padding-top: 0 !important;
+    flex-direction: column !important;
+  }
+
+  .mobileTopbar {
+    display: flex !important;
+    position: sticky !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    height: 62px !important;
+    min-height: 62px !important;
+    z-index: 140 !important;
+    padding: 8px 12px !important;
+    margin: 0 !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 10px !important;
+    background: linear-gradient(135deg, #071427 0%, #083d4a 48%, #0f766e 100%) !important;
+    border-bottom: 1px solid rgba(45, 212, 191, 0.28) !important;
+    box-shadow: 0 8px 22px rgba(2, 6, 23, 0.22) !important;
+  }
+
+  .mobileMenuBtn {
+    width: 42px !important;
+    height: 42px !important;
+    min-width: 42px !important;
+    min-height: 42px !important;
+    border-radius: 14px !important;
+    font-size: 23px !important;
+    padding: 0 !important;
+    justify-content: center !important;
+    align-items: center !important;
+    background: rgba(255, 255, 255, 0.11) !important;
+    border: 1px solid rgba(255, 255, 255, 0.22) !important;
+    color: #fff !important;
+  }
+
+  .mobileTopbarBrand {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    justify-content: flex-end !important;
+    gap: 9px !important;
+  }
+
+  .mobileTopbarBrand img {
+    width: 42px !important;
+    height: 42px !important;
+    padding: 4px !important;
+    border-radius: 999px !important;
+    object-fit: contain !important;
+  }
+
+  .mobileTopbarBrand span {
+    font-size: 20px !important;
+    max-width: 170px !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  .sidebar.mobileOpen {
+    padding-top: 58px !important;
+  }
+
+  .mobileCloseBtn,
+  .sidebar.mobileOpen .mobileCloseBtn {
+    top: 12px !important;
+    right: 12px !important;
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+    min-height: 40px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 !important;
+    line-height: 1 !important;
+    font-size: 28px !important;
+    border-radius: 14px !important;
+    background: rgba(255, 255, 255, 0.12) !important;
+    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+    color: #ffffff !important;
+    box-shadow: none !important;
+  }
+
+  .main {
+    padding-top: 12px !important;
+  }
+
+  .tableWrap,
+  .mobileCardTable,
+  .statusTableWrap,
+  .expenseTableWrap {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    border-radius: 18px !important;
+    background: rgba(255,255,255,0.94) !important;
+    border: 1px solid rgba(203,213,225,0.75) !important;
+    box-shadow: 0 12px 28px rgba(15,23,42,.06) !important;
+  }
+
+  .mobileCardTable table,
+  .statusTableWrap table,
+  .expenseTableWrap table,
+  .tableWrap table {
+    display: table !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    table-layout: fixed !important;
+    border-collapse: collapse !important;
+  }
+
+  .mobileCardTable thead,
+  .mobileCardTable tbody,
+  .mobileCardTable tr,
+  .mobileCardTable th,
+  .mobileCardTable td {
+    display: revert !important;
+    width: auto !important;
+  }
+
+  .mobileCardTable thead { display: table-header-group !important; }
+  .mobileCardTable tbody { display: table-row-group !important; }
+  .mobileCardTable tr { display: table-row !important; box-shadow: none !important; border-radius: 0 !important; padding: 0 !important; }
+  .mobileCardTable th,
+  .mobileCardTable td {
+    display: table-cell !important;
+    border-bottom: 1px solid #e5edf6 !important;
+    white-space: normal !important;
+    word-break: normal !important;
+    overflow-wrap: anywhere !important;
+    vertical-align: middle !important;
+  }
+
+  .mobileCardTable td::before { content: none !important; display: none !important; }
+
+  .statusTableWrap th,
+  .statusTableWrap td {
+    padding: 8px 5px !important;
+    font-size: 11px !important;
+    line-height: 1.18 !important;
+  }
+
+  .statusTableWrap th {
+    font-size: 9px !important;
+    letter-spacing: .035em !important;
+  }
+
+  .statusTableWrap th:nth-child(3),
+  .statusTableWrap td:nth-child(3),
+  .statusTableWrap th:nth-child(4),
+  .statusTableWrap td:nth-child(4),
+  .statusTableWrap th:nth-child(6),
+  .statusTableWrap td:nth-child(6),
+  .statusTableWrap th:nth-child(7),
+  .statusTableWrap td:nth-child(7),
+  .statusTableWrap th:nth-child(8),
+  .statusTableWrap td:nth-child(8) {
+    display: none !important;
+  }
+
+  .statusTableWrap th:nth-child(1), .statusTableWrap td:nth-child(1) { width: 12% !important; }
+  .statusTableWrap th:nth-child(2), .statusTableWrap td:nth-child(2) { width: 26% !important; }
+  .statusTableWrap th:nth-child(5), .statusTableWrap td:nth-child(5) { width: 15% !important; }
+  .statusTableWrap th:nth-child(9), .statusTableWrap td:nth-child(9) { width: 17% !important; }
+  .statusTableWrap th:nth-child(10), .statusTableWrap td:nth-child(10) { width: 18% !important; }
+  .statusTableWrap th:nth-child(11), .statusTableWrap td:nth-child(11) { width: 12% !important; }
+
+  .statusTableWrap .status {
+    min-width: 0 !important;
+    width: 100% !important;
+    padding: 6px 4px !important;
+    font-size: 10px !important;
+    border-radius: 999px !important;
+  }
+
+  .statusTableWrap .payBtn,
+  .statusTableWrap .smallBtn {
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 7px 4px !important;
+    font-size: 10px !important;
+    border-radius: 10px !important;
+  }
+
+  .expenseTableWrap th,
+  .expenseTableWrap td {
+    padding: 9px 7px !important;
+    font-size: 11px !important;
+    line-height: 1.18 !important;
+  }
+
+  .expenseTableWrap th { font-size: 9px !important; letter-spacing: .04em !important; }
+  .expenseTableWrap th:nth-child(5),
+  .expenseTableWrap td:nth-child(5),
+  .expenseTableWrap th:nth-child(6),
+  .expenseTableWrap td:nth-child(6) { display: none !important; }
+
+  .expenseTableWrap th:nth-child(1), .expenseTableWrap td:nth-child(1) { width: 23% !important; }
+  .expenseTableWrap th:nth-child(2), .expenseTableWrap td:nth-child(2) { width: 22% !important; }
+  .expenseTableWrap th:nth-child(3), .expenseTableWrap td:nth-child(3) { width: 18% !important; }
+  .expenseTableWrap th:nth-child(4), .expenseTableWrap td:nth-child(4) { width: 37% !important; }
+
+  .expenseTableWrap td:nth-child(4) {
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    display: table-cell !important;
+  }
+}
+
+@media (max-width: 430px) {
+  .statusTableWrap th,
+  .statusTableWrap td {
+    padding: 7px 4px !important;
+    font-size: 10px !important;
+  }
+
+  .statusTableWrap th { font-size: 8px !important; }
+  .statusTableWrap th:nth-child(2), .statusTableWrap td:nth-child(2) { width: 24% !important; }
+  .statusTableWrap th:nth-child(10), .statusTableWrap td:nth-child(10) { width: 20% !important; }
+
+  .expenseTableWrap th,
+  .expenseTableWrap td {
+    padding: 8px 5px !important;
+    font-size: 10px !important;
+  }
+}

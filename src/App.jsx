@@ -10,6 +10,8 @@ import {
 import { auth } from "./firebase";
 import "./App.css";
 import logo from "./assets/socioledger-logo.png";
+import socioLedgerIcon from "./assets/socioledger-app-icon.png";
+import vioraIcon from "./assets/viora-app-icon.png";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -105,6 +107,154 @@ function phoneToEmail(phone = "") {
   return `${normalizePhone(phone)}@socioledger.local`;
 }
 
+function getAuthEmailPhone(authUser) {
+  const emailPhone = String(authUser?.email || "").split("@")[0];
+  return normalizePhone(authUser?.phoneNumber || emailPhone);
+}
+
+function idsToBooleanMap(value) {
+  const ids = [];
+
+  if (Array.isArray(value)) {
+    value.filter(Boolean).forEach((id) => ids.push(String(id)));
+  } else if (value && typeof value === "object") {
+    Object.keys(value)
+      .filter((id) => value[id] === true || value[id] === "true" || value[id] === 1)
+      .forEach((id) => ids.push(String(id)));
+  } else if (value) {
+    ids.push(String(value));
+  }
+
+  return [...new Set(ids)].reduce((acc, id) => {
+    acc[id] = true;
+    return acc;
+  }, {});
+}
+
+function mergeFlatIdMaps(a, b) {
+  if (!a && !b) return undefined;
+
+  const result = {};
+  const mergeOne = (value) => {
+    if (!value) return;
+
+    if (Array.isArray(value)) {
+      value.filter(Boolean).forEach((id) => {
+        result[String(id)] = true;
+      });
+      return;
+    }
+
+    if (typeof value === "object") {
+      Object.entries(value).forEach(([societyId, flatValue]) => {
+        if (flatValue === true || flatValue === "true" || flatValue === 1) {
+          result[String(societyId)] = true;
+          return;
+        }
+
+        if (flatValue && typeof flatValue === "object") {
+          result[String(societyId)] = {
+            ...(result[String(societyId)] && typeof result[String(societyId)] === "object"
+              ? result[String(societyId)]
+              : {}),
+            ...idsToBooleanMap(flatValue),
+          };
+        }
+      });
+    }
+  };
+
+  mergeOne(a);
+  mergeOne(b);
+  return result;
+}
+
+function mergeAuthProfiles(primary = {}, legacy = {}) {
+  const merged = {
+    ...legacy,
+    ...primary,
+  };
+
+  const mergedSocietyIds = idsToBooleanMap([
+    ...Object.keys(idsToBooleanMap(legacy.societyIds)),
+    ...Object.keys(idsToBooleanMap(primary.societyIds)),
+  ]);
+
+  if (Object.keys(mergedSocietyIds).length > 0) {
+    merged.societyIds = mergedSocietyIds;
+  }
+
+  const mergedFlatIds = mergeFlatIdMaps(legacy.flatIds, primary.flatIds);
+  if (mergedFlatIds) merged.flatIds = mergedFlatIds;
+
+  if (!merged.flatId) merged.flatId = primary.flatId || legacy.flatId || "";
+  if (primary.active === false) merged.active = false;
+
+  return merged;
+}
+
+function findUserProfileForAuth(usersMap, authUser, fallbackPhone = "") {
+  const uid = String(authUser?.uid || "");
+  const authEmail = String(authUser?.email || "").toLowerCase();
+  const authPhone = normalizePhone(fallbackPhone || getAuthEmailPhone(authUser));
+
+  if (!usersMap || !uid) return null;
+
+  const exactProfile = usersMap[uid] || null;
+  const entries = Object.entries(usersMap);
+  const legacyKeyMatches = [
+    authPhone,
+    `resident_${authPhone}`,
+    `manager_${authPhone}`,
+    `super_admin_${authPhone}`,
+  ].filter(Boolean);
+
+  let fallbackMatch = null;
+
+  for (const [key, profile] of entries) {
+    if (!profile || typeof profile !== "object" || key === uid) continue;
+
+    const profileUid = String(profile.uid || profile.authUid || profile.firebaseUid || "");
+    const profileEmail = String(profile.email || profile.loginEmail || "").toLowerCase();
+    const profilePhone = normalizePhone(profile.phone || profile.mobile || profile.contact || "");
+
+    if (profileUid && profileUid === uid) {
+      fallbackMatch = { key, profile, matchType: "uid_field" };
+      break;
+    }
+
+    if (authEmail && profileEmail && profileEmail === authEmail) {
+      fallbackMatch = { key, profile, matchType: "email" };
+      break;
+    }
+
+    if (authPhone && profilePhone && profilePhone === authPhone) {
+      fallbackMatch = { key, profile, matchType: "phone" };
+      break;
+    }
+
+    if (authPhone && legacyKeyMatches.includes(String(key))) {
+      fallbackMatch = { key, profile, matchType: "legacy_key" };
+      break;
+    }
+  }
+
+  if (exactProfile && fallbackMatch) {
+    return {
+      key: uid,
+      legacyKey: fallbackMatch.key,
+      profile: mergeAuthProfiles(exactProfile, fallbackMatch.profile),
+      matchType: `uid_key+${fallbackMatch.matchType}`,
+    };
+  }
+
+  if (exactProfile) {
+    return { key: uid, legacyKey: "", profile: exactProfile, matchType: "uid_key" };
+  }
+
+  return fallbackMatch;
+}
+
 function getCurrentMonth() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -120,6 +270,19 @@ function formatMonth(monthKey) {
 
 function rupee(n) {
   return `₹${Number(n || 0).toLocaleString("en-IN")}`;
+}
+
+function escapeHtml(value = "") {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function getExpenseMonth(expense) {
+  return String(expense?.date || expense?.expenseDate || "").slice(0, 7);
 }
 
 function toDateOnly(dateValue) {
@@ -724,8 +887,10 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [loginPhone, setLoginPhone] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [resetPhone, setResetPhone] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
   const [authUser, setAuthUser] = useState(null);
 
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -736,6 +901,9 @@ export default function App() {
   const [selectedSocietyId, setSelectedSocietyId] = useState("default_society");
   const [reportMonth, setReportMonth] = useState(getCurrentMonth());
   const [statusMonth, setStatusMonth] = useState(getCurrentMonth());
+  const [dashboardMonth, setDashboardMonth] = useState(getCurrentMonth());
+  const [expenseMonth, setExpenseMonth] = useState(getCurrentMonth());
+  const [expenseCategoryFilter, setExpenseCategoryFilter] = useState("All");
 
   const [payModalFlatId, setPayModalFlatId] = useState("");
 
@@ -812,8 +980,10 @@ useEffect(() => {
   let unsubUsers = () => {};
   let unsubSocieties = () => {};
 
-  const unsubUser = onValue(ref(db, `users/${authUser.uid}`), (snapshot) => {
-    const profile = snapshot.val();
+  const unsubUser = onValue(ref(db, "users"), (snapshot) => {
+    const usersMap = snapshot.val() || {};
+    const foundUser = findUserProfileForAuth(usersMap, authUser, loginPhone);
+    const profile = foundUser?.profile || null;
 
     if (!profile || profile.active === false) {
       setUser(null);
@@ -821,14 +991,37 @@ useEffect(() => {
       return;
     }
 
+    const authPhone = getAuthEmailPhone(authUser);
     const loggedUser = {
+      ...profile,
       id: authUser.uid,
       uid: authUser.uid,
-      ...profile,
+      legacyUserKey: foundUser.key,
+      legacyMatchType: foundUser.matchType,
+      phone: normalizePhone(profile.phone || authPhone),
       role: normalizeRole(profile.role),
     };
 
     setUser(loggedUser);
+
+    // Self-heal legacy profiles: old production users were stored as
+    // users/resident_<phone>, users/manager, numeric keys, etc. The app now
+    // also keeps a UID-key profile so the next login resolves directly.
+    if ((foundUser.key !== authUser.uid && !usersMap[authUser.uid]) || foundUser.legacyKey) {
+      update(ref(db, `users/${authUser.uid}`), {
+        ...profile,
+        id: authUser.uid,
+        uid: authUser.uid,
+        legacyUserKey: foundUser.legacyKey || foundUser.key,
+        legacyMatchType: foundUser.matchType,
+        phone: normalizePhone(profile.phone || authPhone),
+        role: normalizeRole(profile.role),
+        migratedToUidAt: Date.now(),
+        updatedAt: Date.now(),
+      }).catch((error) => {
+        console.warn("User profile self-heal skipped", error);
+      });
+    }
 
     const loginSocietyIds = getUserSocietyIds(loggedUser);
 
@@ -900,7 +1093,7 @@ useEffect(() => {
     unsubSocieties();
     unsubUsers();
   };
-}, [authReady, authUser]);
+}, [authReady, authUser, loginPhone]);
 
 useEffect(() => {
   if (!authUser || !user || !selectedSocietyId) return;
@@ -1076,6 +1269,56 @@ useEffect(() => {
     };
   }, [societyData, activeFlats.length]);
 
+  const dashboardMonthlyExpense = useMemo(() => {
+    const expenses = societyData.expenses.filter((expense) => getExpenseMonth(expense) === dashboardMonth);
+    const categoryTotals = expenses.reduce((acc, expense) => {
+      const key = expense.category || "General";
+      acc[key] = (acc[key] || 0) + Number(expense.amount || 0);
+      return acc;
+    }, {});
+
+    const categories = Object.entries(categoryTotals)
+      .map(([category, amount]) => ({ category, amount }))
+      .sort((a, b) => b.amount - a.amount);
+
+    return {
+      month: dashboardMonth,
+      expenses,
+      total: expenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0),
+      categories,
+    };
+  }, [societyData.expenses, dashboardMonth]);
+
+  const expenseMonthSummary = useMemo(() => {
+    const monthExpenses = societyData.expenses.filter((expense) => getExpenseMonth(expense) === expenseMonth);
+    const categoryTotals = monthExpenses.reduce((acc, expense) => {
+      const key = expense.category || "General";
+      acc[key] = (acc[key] || 0) + Number(expense.amount || 0);
+      return acc;
+    }, {});
+
+    const categories = Object.entries(categoryTotals)
+      .map(([category, amount]) => ({ category, amount }))
+      .sort((a, b) => b.amount - a.amount);
+
+    const filteredExpenses = expenseCategoryFilter === "All"
+      ? monthExpenses
+      : monthExpenses.filter((expense) => (expense.category || "General") === expenseCategoryFilter);
+
+    return {
+      total: monthExpenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0),
+      categories,
+      expenses: monthExpenses,
+      filteredExpenses,
+    };
+  }, [societyData.expenses, expenseMonth, expenseCategoryFilter]);
+
+  function openExpenseCategory(category = "All", month = dashboardMonth) {
+    setExpenseMonth(month);
+    setExpenseCategoryFilter(category);
+    openTab("expenses");
+  }
+
   const monthlyReport = useMemo(() => {
     const monthPayments = societyData.payments.filter((p) => getPaymentMonth(p) === reportMonth || String(p.date || p.paymentDate || "").startsWith(reportMonth));
     const monthExpenses = societyData.expenses.filter((e) => String(e.date || "").startsWith(reportMonth));
@@ -1142,12 +1385,12 @@ useEffect(() => {
   const rawPhone = String(loginPhone || "").replace(/\D/g, "");
 
   if (rawPhone.length !== 10) {
-    alert("Exactly 10 digit mobile number enter karo.");
+    alert("Please enter a valid 10-digit mobile number.");
     return;
   }
 
   if (!loginPassword.trim()) {
-    alert("Password enter karo.");
+    alert("Please enter your password.");
     return;
   }
 
@@ -1167,7 +1410,7 @@ async function requestPasswordReset() {
   const rawPhone = normalizePhone(resetPhone || loginPhone);
 
   if (rawPhone.length !== 10) {
-    alert("Reset ke liye registered 10 digit mobile number enter karo.");
+    alert("Please enter your registered 10-digit mobile number.");
     return;
   }
 
@@ -1175,6 +1418,7 @@ async function requestPasswordReset() {
 
   try {
     await push(ref(db, "passwordResetRequests"), {
+      mobile: rawPhone,
       phone: rawPhone,
       loginEmail: phoneToEmail(rawPhone),
       status: "pending",
@@ -1188,11 +1432,12 @@ async function requestPasswordReset() {
       console.warn("Firebase reset email skipped/failed", mailError);
     }
 
-    alert("Password reset request submit ho gayi. Manager/Super Admin password reset karke aapko update kar denge.");
+    alert("Password reset request submitted successfully. The manager or super admin will update you.");
     setResetPhone("");
+    setResetOpen(false);
   } catch (error) {
     console.error(error);
-    alert("Reset request submit nahi ho payi. Thodi der baad try karo.");
+    alert("Unable to submit reset request. Please try again.");
   } finally {
     setResetLoading(false);
   }
@@ -1883,6 +2128,73 @@ async function saveFlat() {
     downloadCSV(`SocioLedger_Payment_Status_${monthlyStatus.month}.csv`, rows);
   }
 
+  function exportStatusPDF() {
+    const societyName = data.societies.find((s) => s.id === selectedSocietyId)?.name || "SocioLedger";
+    const overdueRows = monthlyStatus.rows.filter((row) => Number(row.netPayable || row.due || 0) > 0);
+    const generatedAt = new Date().toLocaleString("en-IN");
+    const rowsHtml = monthlyStatus.rows
+      .map((row) => {
+        const isOverdue = Number(row.netPayable || row.due || 0) > 0;
+        return `
+          <tr class="${isOverdue ? "overdue" : ""}">
+            <td>${escapeHtml(row.flat.flatNo || "-")}</td>
+            <td>${escapeHtml(row.flat.ownerName || "-")}</td>
+            <td>${rupee(row.charge)}</td>
+            <td>${rupee(row.paid)}</td>
+            <td>${rupee(row.due)}</td>
+            <td>${rupee(row.totalDue)}</td>
+            <td>${rupee(row.advanceAdjusted)}</td>
+            <td>${rupee(row.advance)}</td>
+            <td>${rupee(row.netPayable)}</td>
+            <td>${escapeHtml(row.status)}</td>
+          </tr>`;
+      })
+      .join("");
+
+    const html = `<!doctype html>
+<html>
+<head>
+  <title>SocioLedger Payment Status - ${escapeHtml(formatMonth(monthlyStatus.month))}</title>
+  <style>
+    *{box-sizing:border-box} body{font-family:Inter,Arial,sans-serif;margin:0;color:#0f172a;background:#f8fafc} .page{padding:24px}
+    .header{display:flex;align-items:center;justify-content:space-between;gap:16px;background:linear-gradient(135deg,#071427,#0f766e);color:#fff;border-radius:20px;padding:20px 24px;margin-bottom:18px}
+    .brand{display:flex;align-items:center;gap:12px}.brand img{width:54px;height:54px;border-radius:16px;background:#fff;padding:4px}.brand h1{margin:0;font-size:28px}.brand p{margin:4px 0 0;color:#c7fff2}
+    .meta{text-align:right;font-size:12px;color:#dbeafe}.summary{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:14px 0 18px}.box{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:12px}.box span{display:block;font-size:11px;color:#64748b;text-transform:uppercase;font-weight:800}.box b{font-size:20px}.danger{color:#dc2626}.success{color:#059669}
+    table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;font-size:11px} th{background:#f1f5f9;text-align:left;color:#334155;text-transform:uppercase;font-size:10px;letter-spacing:.04em} th,td{padding:9px;border-bottom:1px solid #e2e8f0} tr.overdue{background:#fff1f2;color:#b91c1c;font-weight:800} tr.overdue td{border-bottom-color:#fecdd3}.footer{margin-top:16px;display:flex;justify-content:space-between;font-size:12px;color:#64748b}.watermark{position:fixed;inset:auto 24px 14px auto;color:#94a3b8;font-size:11px}
+    @page{size:A4 landscape;margin:10mm}
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="brand"><img src="${logo}"/><div><h1>SocioLedger</h1><p>${escapeHtml(societyName)} · ${escapeHtml(formatMonth(monthlyStatus.month))} payment status</p></div></div>
+      <div class="meta">Generated: ${escapeHtml(generatedAt)}<br/>Weekly share report</div>
+    </div>
+    <div class="summary">
+      <div class="box"><span>Paid</span><b class="success">${monthlyStatus.paidCount}</b></div>
+      <div class="box"><span>Partial</span><b>${monthlyStatus.partialCount}</b></div>
+      <div class="box"><span>Pending</span><b class="danger">${monthlyStatus.pendingCount}</b></div>
+      <div class="box"><span>Month Due</span><b class="danger">${rupee(monthlyStatus.totalMonthDue)}</b></div>
+      <div class="box"><span>Net Payable</span><b>${rupee(monthlyStatus.totalNetPayable)}</b></div>
+    </div>
+    <table><thead><tr><th>Flat</th><th>Resident</th><th>Charge</th><th>Paid</th><th>Month Due</th><th>Total Due</th><th>Advance Used</th><th>Advance Left</th><th>Net Payable</th><th>Status</th></tr></thead><tbody>${rowsHtml}</tbody></table>
+    <div class="footer"><span>Overdue rows are highlighted in red and bold.</span><b>Powered by WinFly</b></div>
+  </div>
+  <script>window.onload = () => { window.print(); };</script>
+</body>
+</html>`;
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      alert("Please allow pop-ups to generate PDF.");
+      return;
+    }
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+  }
+
+
   if (!authReady) {
     return (
       <div className="loginPage">
@@ -1897,76 +2209,90 @@ async function saveFlat() {
 
   if (!user) {
     return (
-      <div className="loginPage premiumLoginPage appLoginPage">
-        <main className="appLoginScreen">
-          <div className="appStatusBar" aria-hidden="true">
-            <span>9:41</span>
-            <span>▮▮▮  Wi-Fi  100</span>
-          </div>
-
-          <header className="appLoginHeader">
-            <div className="appMenuIcon" aria-hidden="true"><span></span><span></span><span></span></div>
-            <div className="appBrandLockup">
-              <img src={logo} alt="SocioLedger Logo" />
-              <div>
-                <strong>SocioLedger</strong>
-                <small>SOCIETY OS</small>
-              </div>
-            </div>
-            <div className="appBellIcon" aria-hidden="true">⌂</div>
-          </header>
-
-          <section className="appHeroBlock">
-            <p className="eyebrow">Smart Society OS</p>
-            <h1>Manage Society<br /><span>Payments Better.</span></h1>
-            <p>Maintenance, ledger, expenses aur resident payments — sab ek clean app-style dashboard me.</p>
+      <div className="loginPage premiumLoginPage appLoginPage appLoginV2Page">
+        <main className="appLoginV2Screen">
+          <section className="appV2BrandHero" aria-label="SocioLedger login">
+            <img src={logo} alt="SocioLedger Logo" className="appV2Logo" />
+            <h1>Socio<span>Ledger</span></h1>
+            <div className="appV2Divider"><span></span><b>✓</b><span></span></div>
+            <p>Smart Society Management</p>
           </section>
 
-          <section className="appIllustrationCard" aria-hidden="true">
-            <div className="buildingArt">
-              <span></span><span></span><span></span>
-            </div>
-            <div className="floatingChip chipOne">₹ Paid</div>
-            <div className="floatingChip chipTwo">Ledger</div>
-          </section>
-
-          <section className="appLoginActionCard loginCard premiumLoginCard">
-            <div className="loginCardHeader compactLoginHeader">
-              <img src={logo} alt="SocioLedger Logo" className="loginLogoMain" />
+          <section className="appV2LoginCard loginCard premiumLoginCard">
+            <div className="appV2CardTitle">
+              <div className="appV2UserIcon" aria-hidden="true">⌾</div>
               <div>
                 <h2>Welcome Back</h2>
-                <p>Mobile number aur password se login karein.</p>
+                <p>Login to continue to your account</p>
               </div>
             </div>
 
             <label className="fieldLabel">Mobile Number</label>
-            <input
-              value={loginPhone}
-              onChange={(e) => setLoginPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-              placeholder="10 digit registered mobile"
-              inputMode="numeric"
-              maxLength={10}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") login();
-              }}
-            />
+            <div className="appV2InputShell">
+              <span aria-hidden="true">☎</span>
+              <b>+91</b>
+              <input
+                value={loginPhone}
+                onChange={(e) => setLoginPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                placeholder="9876543210"
+                inputMode="numeric"
+                maxLength={10}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") login();
+                }}
+              />
+            </div>
 
             <label className="fieldLabel">Password</label>
-            <input
-              type="password"
-              value={loginPassword}
-              onChange={(e) => setLoginPassword(e.target.value)}
-              placeholder="Enter password"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") login();
-              }}
-            />
+            <div className="appV2InputShell appV2PasswordShell">
+              <span aria-hidden="true">▣</span>
+              <input
+                type={showLoginPassword ? "text" : "password"}
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                placeholder="••••••••"
+                autoComplete="current-password"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") login();
+                }}
+              />
+              <button
+                type="button"
+                className="appV2PasswordToggle"
+                onClick={() => setShowLoginPassword((show) => !show)}
+                aria-label={showLoginPassword ? "Hide password" : "Show password"}
+                title={showLoginPassword ? "Hide password" : "Show password"}
+              >
+                {showLoginPassword ? "🙈" : "👁"}
+              </button>
+            </div>
 
-            <button className="loginPrimaryBtn" onClick={login}>Login</button>
+            <div className="appV2LoginMeta">
+              <label><input type="checkbox" readOnly checked /> Remember Me</label>
+              <button
+                type="button"
+                onClick={() => {
+                  setResetPhone(loginPhone);
+                  setResetOpen((open) => !open);
+                }}
+              >
+                Forgot Password?
+              </button>
+            </div>
 
-            <details className="resetAccordion">
-              <summary>Password bhool gaye?</summary>
-              <p>Registered mobile enter karke reset request bhej do.</p>
+            <button className="loginPrimaryBtn appV2LoginBtn" onClick={login}>↪ Login</button>
+
+            <details className="resetAccordion appV2ResetAccordion" open={resetOpen}>
+              <summary
+                onClick={(e) => {
+                  e.preventDefault();
+                  setResetOpen((open) => !open);
+                }}
+              >
+                <span>Password reset request</span>
+                <b>{resetOpen ? "−" : "+"}</b>
+              </summary>
+              <p>Enter your registered mobile number to request a password reset.</p>
               <div className="resetInline">
                 <input
                   value={resetPhone}
@@ -1980,14 +2306,12 @@ async function saveFlat() {
                 </button>
               </div>
             </details>
+
+            <div className="appV2TrustLine">Secure <span>•</span> Simple <span>•</span> Smart</div>
           </section>
 
-          <section className="appQuickGrid" aria-label="SocioLedger features">
-            <div><b>Society</b><span>Dashboard</span></div>
-            <div><b>Digital</b><span>Ledger</span></div>
-          </section>
-
-          <footer className="appLoginFooter">
+          <p className="appV2Security">✓ Your data is safe and secure with us</p>
+          <footer className="appLoginFooter appV2Footer">
             <span></span> POWERED BY <b>WINFLY</b> <span></span>
           </footer>
         </main>
@@ -2367,17 +2691,88 @@ async function saveFlat() {
               </div>
             </div>
 
+            <div className="dashboardToolbar">
+              <div>
+                <span>Expense month</span>
+                <input type="month" value={dashboardMonth} onChange={(e) => setDashboardMonth(e.target.value)} />
+              </div>
+              <button type="button" className="ghostBtn" onClick={() => openExpenseCategory("All", dashboardMonth)}>View expense details</button>
+            </div>
+
             <div className="cards">
               <div className="card"><span>Total Flats</span><b>{dashboard.flats}</b></div>
               <div className="card"><span>Active Flats</span><b>{dashboard.active}</b></div>
               <div className="card danger"><span>Total Due</span><b>{rupee(dashboard.totalDue)}</b></div>
               <div className="card success"><span>Advance</span><b>{rupee(dashboard.totalAdvance)}</b></div>
               <div className="card"><span>Total Collection</span><b>{rupee(dashboard.collection)}</b></div>
-              <div className="card danger"><span>Total Expense</span><b>{rupee(dashboard.totalExpense)}</b></div>
+              <div className="card danger"><span>{formatMonth(dashboardMonth)} Expense</span><b>{rupee(dashboardMonthlyExpense.total)}</b></div>
               <div className={dashboard.netBalance >= 0 ? "card success" : "card danger"}>
                 <span>Net Balance</span><b>{rupee(dashboard.netBalance)}</b>
               </div>
             </div>
+
+            <section className="expenseInsightPanel">
+              <div className="sectionTitleRow">
+                <div>
+                  <h2>{formatMonth(dashboardMonth)} Expense Categories</h2>
+                  <p>Tap any category to view its expense entries.</p>
+                </div>
+                <b>{rupee(dashboardMonthlyExpense.total)}</b>
+              </div>
+              <div className="expenseCategoryGrid">
+                {dashboardMonthlyExpense.categories.length > 0 ? (
+                  dashboardMonthlyExpense.categories.map((item) => (
+                    <button key={item.category} type="button" className="expenseCategoryCard" onClick={() => openExpenseCategory(item.category, dashboardMonth)}>
+                      <span>{item.category}</span>
+                      <b>{rupee(item.amount)}</b>
+                    </button>
+                  ))
+                ) : (
+                  <div className="emptyMini">No expenses recorded for this month.</div>
+                )}
+              </div>
+            </section>
+
+            <section className="dashboardPromoPanel" aria-label="SocioLedger and VIORA apps">
+              <div className="promoProduct promoSocioLedger">
+                <div className="promoLogoWrap">
+                  <img src={socioLedgerIcon} alt="SocioLedger" />
+                </div>
+                <div className="promoCopy">
+                  <span className="promoEyebrow">Society Management OS</span>
+                  <h2>SocioLedger</h2>
+                  <p>Smart society dashboard for flats, dues, collections, expenses, ledger and resident transparency.</p>
+                  <div className="promoChips">
+                    <span>Maintenance</span>
+                    <span>Ledger</span>
+                    <span>Reports</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="promoDivider" aria-hidden="true"></div>
+
+              <div className="promoProduct promoViora">
+                <div className="promoLogoWrap vioraLogoWrap">
+                  <img src={vioraIcon} alt="VIORA" />
+                </div>
+                <div className="promoCopy">
+                  <span className="promoEyebrow">Wellness Companion</span>
+                  <h2>VIORA</h2>
+                  <p>AI wellness, yoga, meditation, hydration and healthy habit companion for better everyday living.</p>
+                  <div className="promoChips">
+                    <span>AI Coach</span>
+                    <span>Yoga</span>
+                    <span>Wellness</span>
+                  </div>
+                </div>
+              </div>
+
+              <footer className="promoFooter">
+                <span>© 2026 SocioLedger</span>
+                <b>Powered by WinFly</b>
+              </footer>
+            </section>
           </>
         )}
 
@@ -2527,6 +2922,7 @@ async function saveFlat() {
             <div className="formGrid">
               <input type="month" value={statusMonth} onChange={(e) => setStatusMonth(e.target.value)} />
               {canManage() && <button onClick={exportStatusCSV}>Export Status CSV</button>}
+              {canManage() && <button onClick={exportStatusPDF}>Generate PDF</button>}
             </div>
 
             <div className="cards">
@@ -2541,31 +2937,31 @@ async function saveFlat() {
               <div className="card warning"><span>Net Payable</span><b>{rupee(monthlyStatus.totalNetPayable)}</b></div>
             </div>
 
-            <div className="tableWrap">
+            <div className="tableWrap mobileCardTable statusTableWrap">
               <table>
                 <thead>
                   <tr>
-                    <th>Flat</th><th>Resident</th><th>Month Charge</th><th>Paid Adjusted</th><th>Month Due</th><th>Gross Total Due</th><th>Advance Adjusted</th><th>Remaining Advance</th><th>Net Payable</th><th>Status</th><th>Pay</th>
+                    <th>Flat</th><th>Resident</th><th>Charge</th><th>Paid</th><th>Month Due</th><th>Total Due</th><th>Advance Used</th><th>Advance Left</th><th>Net Payable</th><th>Status</th><th>Pay</th>
                   </tr>
                 </thead>
                 <tbody>
                   {monthlyStatus.rows.map((row) => (
-                    <tr key={row.flat.id}>
-                      <td>{row.flat.flatNo || "-"}</td>
-                      <td>{row.flat.ownerName || "-"}</td>
-                      <td>{rupee(row.charge)}</td>
-                      <td>{rupee(row.paid)}</td>
-                      <td>{rupee(row.due)}</td>
-                      <td>{rupee(row.totalDue)}</td>
-                      <td>{rupee(row.advanceAdjusted)}</td>
-                      <td>{rupee(row.advance)}</td>
-                      <td>{rupee(row.netPayable)}</td>
-                      <td>
+                    <tr key={row.flat.id} className={row.netPayable > 0 ? "overdueRow" : ""}>
+                      <td data-label="Flat">{row.flat.flatNo || "-"}</td>
+                      <td data-label="Resident">{row.flat.ownerName || "-"}</td>
+                      <td data-label="Charge">{rupee(row.charge)}</td>
+                      <td data-label="Paid">{rupee(row.paid)}</td>
+                      <td data-label="Month Due">{rupee(row.due)}</td>
+                      <td data-label="Total Due">{rupee(row.totalDue)}</td>
+                      <td data-label="Advance Used">{rupee(row.advanceAdjusted)}</td>
+                      <td data-label="Advance Left">{rupee(row.advance)}</td>
+                      <td data-label="Net Payable">{rupee(row.netPayable)}</td>
+                      <td data-label="Status">
                         <span className={row.status === "Paid" ? "status paid" : row.status === "Partial" ? "status partial" : "status pending"}>
                           {row.status}
                         </span>
                       </td>
-                      <td>
+                      <td data-label="Pay">
                         {canShowPayButton(row.flat) && row.netPayable > 0 ? (
                           <button className="payBtn smallBtn" onClick={() => setPayModalFlatId(row.flat.id)}>Pay</button>
                         ) : (
@@ -2585,12 +2981,25 @@ async function saveFlat() {
             <div className="pageHeader">
               <div>
                 <h1>Expenses</h1>
-                <p>Visible to all. Add permission only for admin and manager.</p>
+                <p>Month-wise expense control with category drill-down.</p>
               </div>
             </div>
 
+            <div className="expenseControlPanel">
+              <div className="monthFilterBox">
+                <label>Expense Month</label>
+                <input type="month" value={expenseMonth} onChange={(e) => { setExpenseMonth(e.target.value); setExpenseCategoryFilter("All"); }} />
+              </div>
+              <button type="button" className={expenseCategoryFilter === "All" ? "filterPill active" : "filterPill"} onClick={() => setExpenseCategoryFilter("All")}>All · {rupee(expenseMonthSummary.total)}</button>
+              {expenseMonthSummary.categories.map((item) => (
+                <button key={item.category} type="button" className={expenseCategoryFilter === item.category ? "filterPill active" : "filterPill"} onClick={() => setExpenseCategoryFilter(item.category)}>
+                  {item.category} · {rupee(item.amount)}
+                </button>
+              ))}
+            </div>
+
             {canManage() && (
-              <div className="formGrid">
+              <div className="formGrid expenseFormGrid">
                 <input type="number" placeholder="Amount" value={expenseForm.amount} onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })} />
                 <select value={expenseForm.category} onChange={(e) => setExpenseForm({ ...expenseForm, category: e.target.value })}>
                   <option>General</option><option>Electricity</option><option>Water</option><option>Lift</option><option>Cleaning</option><option>Security</option><option>Repair</option><option>Salary</option><option>Other</option>
@@ -2601,16 +3010,19 @@ async function saveFlat() {
               </div>
             )}
 
-            <div className="tableWrap">
+            <div className="tableWrap mobileCardTable expenseTableWrap">
               <table>
                 <thead><tr><th>Date</th><th>Category</th><th>Amount</th><th>Note</th><th>Added By</th><th>Action</th></tr></thead>
                 <tbody>
-                  {societyData.expenses.map((expense) => (
+                  {expenseMonthSummary.filteredExpenses.map((expense) => (
                     <tr key={expense.id}>
-                      <td>{expense.date}</td><td>{expense.category}</td><td>{rupee(expense.amount)}</td><td>{expense.note || "-"}</td><td>{expense.createdBy || "-"}</td>
-                      <td>{isSuperAdmin() ? <button className="dangerBtn" onClick={() => deleteExpense(expense.id)}>Delete</button> : "-"}</td>
+                      <td data-label="Date">{expense.date}</td><td data-label="Category">{expense.category}</td><td data-label="Amount">{rupee(expense.amount)}</td><td data-label="Note">{expense.note || "-"}</td><td data-label="Added By">{expense.createdBy || "-"}</td>
+                      <td data-label="Action">{isSuperAdmin() ? <button className="dangerBtn" onClick={() => deleteExpense(expense.id)}>Delete</button> : "-"}</td>
                     </tr>
                   ))}
+                  {expenseMonthSummary.filteredExpenses.length === 0 && (
+                    <tr><td data-label="Status" colSpan="6">No expenses found for this selection.</td></tr>
+                  )}
                 </tbody>
               </table>
             </div>
