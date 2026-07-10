@@ -879,6 +879,22 @@ function downloadCSV(filename, rows) {
   URL.revokeObjectURL(url);
 }
 
+
+function LoginOrbitIcon({ type }) {
+  const common = { viewBox: "0 0 24 24", "aria-hidden": "true" };
+  const icons = {
+    key: <svg {...common}><circle cx="8" cy="12" r="3"/><path d="M11 12h10M17 12v3M20 12v2"/></svg>,
+    camera: <svg {...common}><path d="M4 7h11a3 3 0 013 3v7H4z"/><path d="M18 10l3-2v8l-3-2"/><circle cx="10" cy="12" r="2.5"/></svg>,
+    lift: <svg {...common}><rect x="5" y="4" width="14" height="16" rx="2"/><path d="M12 4v16M8 8l2-2 2 2M16 16l-2 2-2-2"/></svg>,
+    building: <svg {...common}><path d="M4 21V7l8-4 8 4v14"/><path d="M8 9h2M14 9h2M8 13h2M14 13h2M8 17h2M14 17h2M2 21h20"/></svg>,
+    rupee: <svg {...common}><circle cx="12" cy="12" r="9"/><path d="M8 7h8M8 10h8M9 7c4 0 5 5 0 5h-1l6 5"/></svg>,
+    users: <svg {...common}><circle cx="9" cy="9" r="3"/><circle cx="17" cy="10" r="2"/><path d="M3 20c0-4 3-6 6-6s6 2 6 6M15 15c3 0 5 2 5 5"/></svg>,
+    shield: <svg {...common}><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z"/><path d="M9 12l2 2 4-5"/></svg>,
+    door: <svg {...common}><path d="M5 21V4l11-2v19M5 21h14M12 12h.01"/></svg>,
+  };
+  return icons[type] || icons.building;
+}
+
 export default function App() {
   const [data, setData] = useState(initialData);
   const [loading, setLoading] = useState(true);
@@ -888,6 +904,7 @@ export default function App() {
   const [loginPhone, setLoginPhone] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [subscriptionLoaded, setSubscriptionLoaded] = useState(false);
   const [resetPhone, setResetPhone] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
@@ -1002,7 +1019,14 @@ useEffect(() => {
       role: normalizeRole(profile.role),
     };
 
-    setUser(loggedUser);
+    setUser((previousUser) => {
+      // Realtime profile listeners may fire again after self-heal/profile updates.
+      // Reset navigation only for a genuinely new login, not on every DB refresh.
+      if (!previousUser || previousUser.id !== loggedUser.id) {
+        setActiveTab("dashboard");
+      }
+      return loggedUser;
+    });
 
     // Self-heal legacy profiles: old production users were stored as
     // users/resident_<phone>, users/manager, numeric keys, etc. The app now
@@ -1084,7 +1108,6 @@ useEffect(() => {
       }
     }
 
-    setActiveTab("dashboard");
     setLoading(false);
   });
 
@@ -1097,6 +1120,8 @@ useEffect(() => {
 
 useEffect(() => {
   if (!authUser || !user || !selectedSocietyId) return;
+
+  setSubscriptionLoaded(false);
 
   if (!canAccessSociety(user, selectedSocietyId)) {
     alert("You do not have access to this society.");
@@ -1169,6 +1194,7 @@ useEffect(() => {
         ...prev,
         subscription: snapshot.val() || null,
       }));
+      setSubscriptionLoaded(true);
     }
   );
 
@@ -2209,48 +2235,57 @@ async function saveFlat() {
 
   if (!user) {
     return (
-      <div className="loginPage premiumLoginPage appLoginPage appLoginV2Page">
-        <main className="appLoginV2Screen">
-          <section className="appV2BrandHero" aria-label="SocioLedger login">
-            <img src={logo} alt="SocioLedger Logo" className="appV2Logo" />
-            <h1>Socio<span>Ledger</span></h1>
-            <div className="appV2Divider"><span></span><b>✓</b><span></span></div>
-            <p>Smart Society Management</p>
+      <div className="loginPage enterpriseLoginPage neoLoginPage">
+        <div className="neoSkyline" aria-hidden="true"></div>
+        <div className="neoOrbit" aria-hidden="true">
+          {['key','camera','lift','building','rupee','users','shield','door'].map((type, index) => (
+            <span key={type} className={`neoFloatIcon neoFloatIcon${index + 1}`}>
+              <LoginOrbitIcon type={type} />
+            </span>
+          ))}
+        </div>
+        <main className="enterpriseLoginShell neoLoginShell">
+          <section className="enterpriseBrand neoBrand" aria-label="SocioLedger login">
+            <img src={logo} alt="SocioLedger Logo" className="enterpriseLogo" />
+            <div>
+              <h1>Socio<span>Ledger</span></h1>
+              <p>Smart Society Management</p>
+            </div>
           </section>
 
-          <section className="appV2LoginCard loginCard premiumLoginCard">
-            <div className="appV2CardTitle">
-              <div className="appV2UserIcon" aria-hidden="true">⌾</div>
-              <div>
-                <h2>Welcome Back</h2>
-                <p>Login to continue to your account</p>
-              </div>
+          <section className="enterpriseLoginCard neoLoginCard">
+            <div className="enterpriseTitle">
+              <span>Secure access</span>
+              <h2>Welcome back</h2>
+              <p>Manage maintenance, payments and society updates in one place.</p>
             </div>
 
-            <label className="fieldLabel">Mobile Number</label>
-            <div className="appV2InputShell">
-              <span aria-hidden="true">☎</span>
-              <b>+91</b>
+            <label className="enterpriseFieldLabel" htmlFor="login-mobile">Mobile number</label>
+            <div className="enterpriseInputRow">
+              <span className="enterprisePrefix">+91</span>
               <input
+                id="login-mobile"
                 value={loginPhone}
                 onChange={(e) => setLoginPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
                 placeholder="9876543210"
                 inputMode="numeric"
+                autoComplete="username"
                 maxLength={10}
+                autoFocus
                 onKeyDown={(e) => {
                   if (e.key === "Enter") login();
                 }}
               />
             </div>
 
-            <label className="fieldLabel">Password</label>
-            <div className="appV2InputShell appV2PasswordShell">
-              <span aria-hidden="true">▣</span>
+            <label className="enterpriseFieldLabel" htmlFor="login-password">Password</label>
+            <div className="enterpriseInputRow enterprisePasswordRow">
               <input
+                id="login-password"
                 type={showLoginPassword ? "text" : "password"}
                 value={loginPassword}
                 onChange={(e) => setLoginPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder="Enter your password"
                 autoComplete="current-password"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") login();
@@ -2258,63 +2293,76 @@ async function saveFlat() {
               />
               <button
                 type="button"
-                className="appV2PasswordToggle"
+                className="enterpriseEyeButton"
                 onClick={() => setShowLoginPassword((show) => !show)}
                 aria-label={showLoginPassword ? "Hide password" : "Show password"}
-                title={showLoginPassword ? "Hide password" : "Show password"}
               >
-                {showLoginPassword ? "🙈" : "👁"}
+                {showLoginPassword ? (
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M10.6 10.7a2 2 0 002.7 2.7M9.9 4.3A10.7 10.7 0 0112 4c5.2 0 8.7 4 9.6 5.2.5.6.5 1.4 0 2C21 12 19.8 13.4 18 14.7M6.2 6.2C4.3 7.4 3.1 9 2.4 9.9a1.8 1.8 0 000 2.2C3.3 13.3 6.8 17 12 17c1 0 1.9-.1 2.8-.4" /></svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.4 9.9C3.3 8.7 6.8 5 12 5s8.7 3.7 9.6 4.9c.5.6.5 1.4 0 2C20.7 13.1 17.2 17 12 17S3.3 13.1 2.4 11.9a1.7 1.7 0 010-2z" /><circle cx="12" cy="11" r="3" /></svg>
+                )}
               </button>
             </div>
 
-            <div className="appV2LoginMeta">
-              <label><input type="checkbox" readOnly checked /> Remember Me</label>
-              <button
-                type="button"
-                onClick={() => {
-                  setResetPhone(loginPhone);
-                  setResetOpen((open) => !open);
-                }}
-              >
-                Forgot Password?
-              </button>
+            <div className="enterpriseLoginMeta">
+              <label><input type="checkbox" readOnly checked /> Keep me signed in</label>
+              <button type="button" onClick={() => { setResetPhone(loginPhone); setResetOpen(true); }}>Forgot password?</button>
             </div>
 
-            <button className="loginPrimaryBtn appV2LoginBtn" onClick={login}>↪ Login</button>
-
-            <details className="resetAccordion appV2ResetAccordion" open={resetOpen}>
-              <summary
-                onClick={(e) => {
-                  e.preventDefault();
-                  setResetOpen((open) => !open);
-                }}
-              >
-                <span>Password reset request</span>
-                <b>{resetOpen ? "−" : "+"}</b>
-              </summary>
-              <p>Enter your registered mobile number to request a password reset.</p>
-              <div className="resetInline">
-                <input
-                  value={resetPhone}
-                  onChange={(e) => setResetPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                  placeholder="Mobile for reset"
-                  inputMode="numeric"
-                  maxLength={10}
-                />
-                <button type="button" onClick={requestPasswordReset} disabled={resetLoading}>
-                  {resetLoading ? "Sending..." : "Reset"}
-                </button>
-              </div>
-            </details>
-
-            <div className="appV2TrustLine">Secure <span>•</span> Simple <span>•</span> Smart</div>
+            <button className="enterpriseLoginButton neoLoginButton" onClick={login}><span>Sign in</span><b aria-hidden="true">→</b></button>
+            <div className="neoTrustGrid">
+              <div><LoginOrbitIcon type="shield" /><span><b>Secure</b><small>Protected access</small></span></div>
+              <div><LoginOrbitIcon type="building" /><span><b>Society-wide</b><small>One connected system</small></span></div>
+              <div><LoginOrbitIcon type="users" /><span><b>Role-based</b><small>Resident to admin</small></span></div>
+            </div>
           </section>
 
-          <p className="appV2Security">✓ Your data is safe and secure with us</p>
-          <footer className="appLoginFooter appV2Footer">
-            <span></span> POWERED BY <b>WINFLY</b> <span></span>
-          </footer>
+          <footer className="enterpriseFooter neoFooter">Powered by <b>WinFly</b><small>Trusted society operations platform</small></footer>
         </main>
+
+        {resetOpen && (
+          <div className="enterpriseModalBackdrop" role="presentation" onClick={() => setResetOpen(false)}>
+            <section className="enterpriseResetModal" role="dialog" aria-modal="true" aria-labelledby="reset-title" onClick={(e) => e.stopPropagation()}>
+              <button className="enterpriseModalClose" type="button" onClick={() => setResetOpen(false)} aria-label="Close">×</button>
+              <span className="enterpriseModalEyebrow">Account recovery</span>
+              <h2 id="reset-title">Reset your password</h2>
+              <p>Enter your registered mobile number. Your request will be sent to the society administrator.</p>
+              <label className="enterpriseFieldLabel" htmlFor="reset-mobile">Registered mobile number</label>
+              <div className="enterpriseInputRow">
+                <span className="enterprisePrefix">+91</span>
+                <input id="reset-mobile" value={resetPhone} onChange={(e) => setResetPhone(e.target.value.replace(/\D/g, "").slice(0, 10))} placeholder="9876543210" inputMode="numeric" maxLength={10} autoFocus />
+              </div>
+              <div className="enterpriseModalActions">
+                <button type="button" className="enterpriseSecondaryButton" onClick={() => setResetOpen(false)}>Cancel</button>
+                <button type="button" className="enterprisePrimaryButton" onClick={requestPasswordReset} disabled={resetLoading}>{resetLoading ? "Submitting..." : "Submit request"}</button>
+              </div>
+            </section>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (
+    user &&
+    normalizeRole(user.role) !== roles.SUPER_ADMIN &&
+    selectedSocietyId &&
+    subscriptionLoaded &&
+    subscriptionAccess.blocked
+  ) {
+    return (
+      <div className="subscriptionGatePage">
+        <SubscriptionBlocked
+          subscriptionAccess={subscriptionAccess}
+          onLogout={logout}
+          societies={allowedSocieties}
+          selectedSocietyId={selectedSocietyId}
+          onSocietyChange={(societyId) => {
+            setSelectedSocietyId(societyId);
+            setSelectedFlatId("");
+          }}
+        />
       </div>
     );
   }
@@ -3310,15 +3358,28 @@ function EmptyState({ title, text }) {
   );
 }
 
-function SubscriptionBlocked({ subscriptionAccess, onLogout }) {
+function SubscriptionBlocked({ subscriptionAccess, onLogout, societies = [], selectedSocietyId = "", onSocietyChange }) {
   return (
-    <div className="emptyState">
-      <h3>Trial Expired / Subscription Required</h3>
+    <div className="subscriptionGateCard">
+      <img src={logo} alt="SocioLedger" className="subscriptionGateLogo" />
+      <span className="subscriptionGateEyebrow">Society access paused</span>
+      <h3>Subscription Required</h3>
 
       <p>
-        Is society ka 15 days trial complete ho gaya hai. App continue use karne
-        ke liye subscription payment required hai.
+        This society's subscription has expired or has been blocked. All manager
+        and resident access for this society is temporarily disabled.
       </p>
+
+      {societies.length > 1 && onSocietyChange && (
+        <label className="subscriptionSocietySwitch">
+          <span>Switch society</span>
+          <select value={selectedSocietyId} onChange={(e) => onSocietyChange(e.target.value)}>
+            {societies.map((society) => (
+              <option key={society.id} value={society.id}>{society.name}</option>
+            ))}
+          </select>
+        </label>
+      )}
 
       <div className="cards">
         <div className="card danger">
@@ -3333,11 +3394,11 @@ function SubscriptionBlocked({ subscriptionAccess, onLogout }) {
       </div>
 
       <p className="hintText">
-        Please Super Admin / SocioLedger team se contact karke payment update karwayein.
+        Please contact the Super Admin or SocioLedger support to renew the society subscription.
       </p>
 
-      <button className="dangerBtn" onClick={onLogout}>
-        Logout
+      <button className="subscriptionLogoutBtn" onClick={onLogout}>
+        Sign Out
       </button>
     </div>
   );

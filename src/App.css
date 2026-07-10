@@ -4404,3 +4404,594 @@ button:hover,
     font-size: 10px !important;
   }
 }
+
+/* Corporate login + society subscription gate */
+.appLoginV2Page {
+  background:
+    radial-gradient(circle at 15% 12%, rgba(39, 207, 190, 0.18), transparent 28%),
+    radial-gradient(circle at 88% 18%, rgba(52, 111, 214, 0.2), transparent 30%),
+    linear-gradient(155deg, #061326 0%, #0b2340 48%, #0d3150 100%);
+}
+
+.appLoginV2Screen {
+  width: min(100%, 460px);
+  padding: clamp(18px, 4vh, 34px) 18px 16px;
+}
+
+.appV2BrandHero {
+  margin-bottom: 16px;
+}
+
+.appV2BrandHero h1 {
+  letter-spacing: -1.2px;
+  font-weight: 800;
+}
+
+.appV2LoginCard {
+  border: 1px solid rgba(255,255,255,.16) !important;
+  background: linear-gradient(145deg, rgba(255,255,255,.98), rgba(245,249,253,.96)) !important;
+  box-shadow: 0 28px 70px rgba(0, 7, 21, .34), inset 0 1px 0 rgba(255,255,255,.85) !important;
+  border-radius: 26px !important;
+}
+
+.appV2CardTitle {
+  border-bottom: 1px solid #e5edf5;
+  padding-bottom: 16px;
+  margin-bottom: 18px;
+}
+
+.appV2UserIcon {
+  background: linear-gradient(145deg, #0b2745, #0b4960) !important;
+  box-shadow: 0 10px 24px rgba(8, 53, 79, .23);
+}
+
+.appV2InputShell {
+  min-height: 54px;
+  border: 1px solid #d6e1ec !important;
+  background: #f7fafc !important;
+  box-shadow: inset 0 1px 2px rgba(15, 38, 64, .04);
+}
+
+.appV2InputShell:focus-within {
+  border-color: #18a8a8 !important;
+  box-shadow: 0 0 0 4px rgba(24, 168, 168, .12) !important;
+  background: #fff !important;
+}
+
+.appV2PasswordShell { position: relative; }
+.appV2PasswordShell input { padding-right: 54px !important; }
+
+.appV2PasswordToggle {
+  position: absolute;
+  right: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: #5e7288;
+  cursor: pointer;
+  transition: .18s ease;
+}
+
+.appV2PasswordToggle svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.appV2PasswordToggle:hover,
+.appV2PasswordToggle:focus-visible {
+  color: #087f86;
+  background: rgba(8, 127, 134, .09);
+  outline: none;
+}
+
+.appV2LoginBtn {
+  min-height: 54px;
+  border-radius: 15px !important;
+  background: linear-gradient(110deg, #087f86, #1268b3) !important;
+  box-shadow: 0 13px 25px rgba(11, 105, 151, .27) !important;
+  font-weight: 800;
+  letter-spacing: .2px;
+}
+
+.appV2LoginBtn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 17px 30px rgba(11, 105, 151, .33) !important;
+}
+
+.subscriptionGatePage {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  background:
+    radial-gradient(circle at 10% 10%, rgba(35, 204, 188, .18), transparent 30%),
+    linear-gradient(145deg, #061326, #0b2a49);
+}
+
+.subscriptionGateCard {
+  width: min(100%, 520px);
+  text-align: center;
+  background: #fff;
+  border: 1px solid rgba(255,255,255,.5);
+  border-radius: 28px;
+  padding: 32px;
+  box-shadow: 0 28px 70px rgba(0,0,0,.32);
+}
+
+.subscriptionGateLogo { width: 70px; height: 70px; object-fit: contain; margin-bottom: 12px; }
+.subscriptionGateEyebrow { display: inline-block; color: #a14d18; background: #fff1e7; border-radius: 999px; padding: 7px 11px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .7px; }
+.subscriptionGateCard h3 { margin: 14px 0 8px; font-size: clamp(27px, 6vw, 36px); color: #102842; }
+.subscriptionGateCard > p { color: #62738a; line-height: 1.6; }
+.subscriptionGateCard .cards { margin: 22px 0 14px; grid-template-columns: repeat(2, minmax(0,1fr)); }
+.subscriptionSocietySwitch { display: grid; gap: 7px; text-align: left; margin: 20px 0; }
+.subscriptionSocietySwitch span { font-size: 12px; font-weight: 800; color: #38516b; text-transform: uppercase; letter-spacing: .5px; }
+.subscriptionSocietySwitch select { width: 100%; min-height: 48px; border-radius: 13px; border: 1px solid #d8e3ed; padding: 0 13px; background: #f8fafc; }
+.subscriptionLogoutBtn { width: 100%; min-height: 50px; border: 0; border-radius: 14px; color: #fff; background: linear-gradient(110deg, #0c7890, #185ea8); font-weight: 800; cursor: pointer; }
+
+@media (max-width: 480px) {
+  .appLoginV2Screen { padding-top: 12px; }
+  .appV2LoginCard { border-radius: 22px !important; padding: 20px !important; }
+  .subscriptionGateCard { padding: 24px 18px; border-radius: 23px; }
+  .subscriptionGateCard .cards { grid-template-columns: 1fr 1fr; gap: 10px; }
+}
+
+/* Enterprise login v3 */
+.enterpriseLoginPage {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  overflow: auto;
+  color: #13243a;
+  background:
+    radial-gradient(circle at 12% 8%, rgba(38, 200, 181, .16), transparent 30%),
+    radial-gradient(circle at 92% 14%, rgba(34, 106, 201, .18), transparent 32%),
+    linear-gradient(145deg, #061325 0%, #0a2340 52%, #0b3552 100%);
+}
+.enterpriseLoginShell { width: min(100%, 430px); display: grid; gap: 18px; }
+.enterpriseBrand { display:flex; align-items:center; justify-content:center; gap:14px; color:#fff; text-align:left; }
+.enterpriseLogo { width:64px; height:64px; object-fit:contain; border-radius:18px; box-shadow:0 14px 34px rgba(0,0,0,.28); }
+.enterpriseBrand h1 { margin:0; font-size:34px; letter-spacing:-1.2px; line-height:1; font-weight:850; }
+.enterpriseBrand h1 span { color:#34d1bc; }
+.enterpriseBrand p { margin:7px 0 0; color:#b8cae0; font-size:14px; }
+.enterpriseLoginCard { background:#fff; border:1px solid rgba(255,255,255,.72); border-radius:24px; padding:28px; box-shadow:0 26px 70px rgba(0,8,24,.34); }
+.enterpriseTitle span,.enterpriseModalEyebrow { display:inline-block; font-size:11px; font-weight:800; letter-spacing:.9px; text-transform:uppercase; color:#087f86; }
+.enterpriseTitle h2,.enterpriseResetModal h2 { margin:7px 0 5px; color:#10233b; font-size:29px; letter-spacing:-.7px; }
+.enterpriseTitle p,.enterpriseResetModal p { margin:0 0 22px; color:#6d7e92; line-height:1.55; font-size:14px; }
+.enterpriseFieldLabel { display:block; margin:14px 0 7px; color:#2f435b; font-size:12px; font-weight:800; }
+.enterpriseInputRow { min-height:54px; display:flex; align-items:center; border:1px solid #d8e3ee; border-radius:14px; background:#f8fafc; transition:.18s ease; overflow:hidden; }
+.enterpriseInputRow:focus-within { border-color:#19a69e; background:#fff; box-shadow:0 0 0 4px rgba(25,166,158,.11); }
+.enterprisePrefix { padding:0 14px; border-right:1px solid #dce6ef; color:#435870; font-weight:800; }
+.enterpriseInputRow input { flex:1; min-width:0; min-height:52px; border:0 !important; outline:0 !important; box-shadow:none !important; background:transparent !important; padding:0 14px !important; color:#12233a !important; font-size:15px; }
+.enterprisePasswordRow { position:relative; }
+.enterprisePasswordRow input { padding-right:50px !important; }
+.enterpriseEyeButton { position:absolute; right:8px; top:50%; transform:translateY(-50%); width:36px; height:36px; border:0; border-radius:10px; background:transparent; color:#60748b; display:grid; place-items:center; cursor:pointer; }
+.enterpriseEyeButton:hover,.enterpriseEyeButton:focus-visible { background:#edf6f5; color:#087f86; outline:none; }
+.enterpriseEyeButton svg { width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.enterpriseLoginMeta { display:flex; justify-content:space-between; align-items:center; gap:12px; margin:16px 0 18px; font-size:12px; color:#5d7087; }
+.enterpriseLoginMeta label { display:flex; align-items:center; gap:7px; }
+.enterpriseLoginMeta input { accent-color:#0a8f92; }
+.enterpriseLoginMeta button { border:0; background:transparent; color:#087f86; font-weight:800; cursor:pointer; padding:0; }
+.enterpriseLoginButton { width:100%; min-height:52px; border:0; border-radius:14px; color:#fff; background:linear-gradient(110deg,#07878b,#1669bc); box-shadow:0 13px 25px rgba(14,105,156,.25); font-size:15px; font-weight:850; cursor:pointer; }
+.enterpriseLoginButton:hover { transform:translateY(-1px); box-shadow:0 17px 30px rgba(14,105,156,.31); }
+.enterpriseSecurity { margin:14px 0 0; text-align:center; color:#8492a3; font-size:11px; }
+.enterpriseFooter { text-align:center; color:#aec1d6; font-size:12px; }
+.enterpriseFooter b { color:#38d0b9; }
+.enterpriseModalBackdrop { position:fixed; inset:0; z-index:9999; display:grid; place-items:center; padding:20px; background:rgba(3,13,27,.68); backdrop-filter:blur(8px); }
+.enterpriseResetModal { position:relative; width:min(100%,420px); border-radius:22px; background:#fff; padding:28px; box-shadow:0 28px 80px rgba(0,0,0,.38); }
+.enterpriseModalClose { position:absolute; top:12px; right:12px; width:34px; height:34px; border:0; border-radius:10px; background:#eef3f7; color:#455a70; font-size:22px; cursor:pointer; }
+.enterpriseModalActions { display:grid; grid-template-columns:1fr 1.45fr; gap:10px; margin-top:22px; }
+.enterpriseSecondaryButton,.enterprisePrimaryButton { min-height:48px; border-radius:13px; font-weight:800; cursor:pointer; }
+.enterpriseSecondaryButton { border:1px solid #d8e3ed; background:#fff; color:#40546b; }
+.enterprisePrimaryButton { border:0; background:linear-gradient(110deg,#07878b,#1669bc); color:#fff; }
+.enterprisePrimaryButton:disabled { opacity:.65; cursor:not-allowed; }
+@media (max-width:520px) {
+  .enterpriseLoginPage { padding:16px; place-items:start center; }
+  .enterpriseLoginShell { gap:14px; padding-top:8px; }
+  .enterpriseBrand { justify-content:flex-start; }
+  .enterpriseLogo { width:54px; height:54px; border-radius:15px; }
+  .enterpriseBrand h1 { font-size:29px; }
+  .enterpriseLoginCard { padding:22px 18px; border-radius:21px; }
+  .enterpriseTitle h2 { font-size:26px; }
+}
+
+/* Dark mode readability hotfix - July 2026 */
+.app.dark .main,
+.app.dark .tableWrap,
+.app.dark .mobileCardTable,
+.app.dark .statusTableWrap,
+.app.dark .expenseTableWrap,
+.app.dark .formGrid,
+.app.dark .settingsCard,
+.app.dark .managerSocietyBox,
+.app.dark .ledgerBox,
+.app.dark .ledgerHeader,
+.app.dark .emptyState,
+.app.dark .profileCard {
+  color: #e5edf8;
+}
+
+.app.dark .tableWrap,
+.app.dark .mobileCardTable,
+.app.dark .statusTableWrap,
+.app.dark .expenseTableWrap {
+  background: #111827 !important;
+  border-color: #2a374b !important;
+}
+
+.app.dark table,
+.app.dark tbody,
+.app.dark tr,
+.app.dark td {
+  background-color: #111827;
+  color: #e5edf8 !important;
+}
+
+.app.dark tbody tr:nth-child(even) td {
+  background-color: #0f172a;
+}
+
+.app.dark tbody tr:hover td {
+  background-color: #182235;
+}
+
+.app.dark th {
+  color: #dbe7f7 !important;
+  background: linear-gradient(180deg, #1b2639, #141d2d) !important;
+  border-color: #334155 !important;
+}
+
+.app.dark td,
+.app.dark th {
+  border-bottom-color: #263449 !important;
+}
+
+.app.dark .mutedText,
+.app.dark .hintText,
+.app.dark .pageHeader p,
+.app.dark .profileRows span,
+.app.dark .ledgerHeader p {
+  color: #9fb0c7 !important;
+}
+
+.app.dark input,
+.app.dark select,
+.app.dark textarea {
+  color: #eef4ff !important;
+  background: #121c2d !important;
+  border-color: #334155 !important;
+}
+
+.app.dark input::placeholder,
+.app.dark textarea::placeholder {
+  color: #7f91aa !important;
+  opacity: 1;
+}
+
+.app.dark .status.paid {
+  color: #052e24 !important;
+  background: #a7f3d0 !important;
+}
+
+.app.dark .status.pending {
+  color: #7f1d1d !important;
+  background: #fecaca !important;
+}
+
+.app.dark .status.partial {
+  color: #78350f !important;
+  background: #fde68a !important;
+}
+
+.app.dark .status.active {
+  color: #052e24 !important;
+  background: #a7f3d0 !important;
+}
+
+.app.dark .status.inactive {
+  color: #7f1d1d !important;
+  background: #fecaca !important;
+}
+
+.app.dark .overdueRow td,
+.app.dark tr.overdueRow td {
+  color: #fecaca !important;
+  background: rgba(127, 29, 29, 0.34) !important;
+  border-bottom-color: rgba(248, 113, 113, 0.35) !important;
+}
+
+.app.dark .overdueRow td strong,
+.app.dark tr.overdueRow td strong {
+  color: #fee2e2 !important;
+}
+
+@media (max-width: 768px) {
+  .app.dark .tableWrap,
+  .app.dark .mobileCardTable,
+  .app.dark .statusTableWrap,
+  .app.dark .expenseTableWrap {
+    background: #111827 !important;
+    border-color: #2a374b !important;
+  }
+
+  .app.dark .mobileCardTable th,
+  .app.dark .mobileCardTable td,
+  .app.dark .statusTableWrap th,
+  .app.dark .statusTableWrap td,
+  .app.dark .expenseTableWrap th,
+  .app.dark .expenseTableWrap td {
+    color: #e5edf8 !important;
+    border-bottom-color: #263449 !important;
+  }
+
+  .app.dark .statusTableWrap tbody tr:not(.overdueRow):nth-child(odd) td,
+  .app.dark .expenseTableWrap tbody tr:not(.overdueRow):nth-child(odd) td {
+    background: #111827 !important;
+  }
+
+  .app.dark .statusTableWrap tbody tr:not(.overdueRow):nth-child(even) td,
+  .app.dark .expenseTableWrap tbody tr:not(.overdueRow):nth-child(even) td {
+    background: #0f172a !important;
+  }
+}
+
+/* SocioLedger Neo animated login */
+.neoLoginPage {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  min-height: 100dvh;
+  padding: 24px 20px;
+  overflow-x: clip;
+  overflow-y: auto;
+  contain: paint;
+  background:
+    radial-gradient(circle at 50% 15%, rgba(17, 147, 255, .24), transparent 30%),
+    radial-gradient(circle at 18% 48%, rgba(37, 211, 181, .14), transparent 25%),
+    radial-gradient(circle at 84% 62%, rgba(108, 92, 231, .17), transparent 25%),
+    linear-gradient(155deg, #020b1a 0%, #061b39 50%, #031022 100%);
+}
+.neoLoginPage::before,
+.neoLoginPage::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(1px);
+  pointer-events: none;
+}
+.neoLoginPage::before {
+  inset: 10% auto auto 50%;
+  width: 680px;
+  height: 680px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(33, 207, 233, .15);
+  box-shadow: 0 0 80px rgba(10, 126, 255, .08) inset;
+}
+.neoLoginPage::after {
+  left: 50%;
+  bottom: -240px;
+  width: 520px;
+  height: 520px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(31, 228, 190, .13);
+  pointer-events: none;
+}
+.neoSkyline {
+  position: absolute;
+  z-index: -2;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 30%;
+  opacity: .36;
+  background:
+    linear-gradient(to top, rgba(1, 8, 20, .96), rgba(3, 18, 39, .25)),
+    repeating-linear-gradient(90deg, #061329 0 56px, transparent 56px 74px),
+    repeating-linear-gradient(90deg, transparent 0 16px, rgba(31, 184, 255, .12) 16px 20px, transparent 20px 46px);
+  clip-path: polygon(0 40%, 7% 40%, 7% 15%, 13% 15%, 13% 54%, 21% 54%, 21% 4%, 30% 4%, 30% 46%, 38% 46%, 38% 23%, 48% 23%, 48% 61%, 56% 61%, 56% 8%, 66% 8%, 66% 40%, 74% 40%, 74% 20%, 84% 20%, 84% 53%, 92% 53%, 92% 30%, 100% 30%, 100% 100%, 0 100%);
+}
+.neoLoginShell { position: relative; z-index: 3; width: min(100%, 470px); gap: 18px; }
+.neoBrand { flex-direction: column; gap: 10px; text-align: center; }
+.neoBrand .enterpriseLogo { width: 76px; height: 76px; border-radius: 22px; border: 1px solid rgba(52, 209, 188, .45); box-shadow: 0 0 30px rgba(31, 190, 255, .28); }
+.neoBrand h1 {
+  font-size: clamp(36px, 6vw, 48px);
+  color: #f8fbff;
+  text-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+}
+
+.neoBrand h1 span {
+  color: #2fd6b7;
+}
+
+.neoBrand p { margin-top: 9px; color: #aebfd5; font-size: 15px; letter-spacing: .2px; }
+.neoLoginCard {
+  background: linear-gradient(145deg, rgba(14, 37, 70, .91), rgba(5, 20, 44, .94));
+  border: 1px solid rgba(82, 199, 255, .62);
+  color: #f7fbff;
+  backdrop-filter: blur(22px);
+  box-shadow: 0 28px 90px rgba(0, 5, 18, .55), 0 0 0 1px rgba(45, 223, 194, .08) inset;
+}
+.neoLoginCard .enterpriseTitle span { color: #31d8c2; }
+.neoLoginCard .enterpriseTitle h2 { color: #fff; }
+.neoLoginCard .enterpriseTitle p { color: #9fb2c9; }
+.neoLoginCard .enterpriseFieldLabel { color: #dce9f7; }
+.neoLoginCard .enterpriseInputRow { background: rgba(10, 31, 60, .72); border-color: rgba(151, 185, 219, .28); }
+.neoLoginCard .enterpriseInputRow:focus-within { background: rgba(11, 39, 72, .9); border-color: #2fd6c3; box-shadow: 0 0 0 4px rgba(47, 214, 195, .11), 0 0 24px rgba(31, 148, 255, .14); }
+.neoLoginCard .enterprisePrefix { color: #3ddbc7; border-color: rgba(151, 185, 219, .22); }
+.neoLoginCard .enterpriseInputRow input { color: #f4f9ff !important; }
+.neoLoginCard .enterpriseInputRow input::placeholder { color: #7187a0 !important; }
+.neoLoginCard .enterpriseEyeButton { color: #a7bdd5; }
+.neoLoginCard .enterpriseEyeButton:hover { background: rgba(48, 211, 193, .12); color: #42e0c9; }
+.neoLoginCard .enterpriseLoginMeta { color: #a9b9cc; }
+.neoLoginCard .enterpriseLoginMeta button { color: #32c7ff; }
+.neoLoginButton { display: flex; align-items: center; justify-content: center; gap: 12px; background: linear-gradient(110deg, #25d5c0, #178dff 54%, #3545ea); box-shadow: 0 16px 36px rgba(24, 114, 244, .34); }
+.neoLoginButton b { font-size: 24px; line-height: 1; transition: transform .2s ease; }
+.neoLoginButton:hover b { transform: translateX(4px); }
+.neoTrustGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 20px; padding-top: 17px; border-top: 1px solid rgba(156, 190, 224, .16); }
+.neoTrustGrid > div { min-width: 0; display: flex; align-items: center; gap: 8px; color: #d9e7f5; }
+.neoTrustGrid svg { flex: 0 0 auto; width: 22px; height: 22px; fill: none; stroke: #36d9c3; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.neoTrustGrid span { display: grid; min-width: 0; }
+.neoTrustGrid b { font-size: 11px; }
+.neoTrustGrid small { color: #758ba4; font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.neoFooter { display: grid; gap: 4px; color: #a8bbd0; }
+.neoFooter small { color: #60758f; font-size: 10px; }
+.neoOrbit { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+.neoFloatIcon {
+  position: absolute;
+  width: 70px;
+  height: 70px;
+  display: grid;
+  place-items: center;
+  border-radius: 22px;
+  border: 1px solid rgba(62, 210, 255, .45);
+  background: linear-gradient(145deg, rgba(9, 47, 86, .74), rgba(9, 18, 52, .72));
+  box-shadow: 0 14px 38px rgba(0, 8, 28, .4), 0 0 22px rgba(29, 175, 255, .15) inset;
+  backdrop-filter: blur(9px);
+  animation: neoFloat 6s ease-in-out infinite;
+}
+.neoFloatIcon svg { width: 34px; height: 34px; fill: none; stroke: #55e2d0; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 9px rgba(53, 219, 205, .42)); }
+.neoFloatIcon2 svg,.neoFloatIcon4 svg,.neoFloatIcon8 svg { stroke: #8b7cff; }
+.neoFloatIcon1 { top: 13%; left: max(4%, calc(50% - 390px)); transform: rotate(-9deg); }
+.neoFloatIcon2 { top: 12%; right: max(4%, calc(50% - 390px)); transform: rotate(10deg); animation-delay: -1.2s; }
+.neoFloatIcon3 { top: 37%; left: max(2%, calc(50% - 430px)); transform: rotate(8deg); animation-delay: -2.3s; }
+.neoFloatIcon4 { top: 38%; right: max(2%, calc(50% - 430px)); transform: rotate(-8deg); animation-delay: -3.4s; }
+.neoFloatIcon5 { top: 67%; left: max(4%, calc(50% - 390px)); transform: rotate(-10deg); animation-delay: -.7s; }
+.neoFloatIcon6 { top: 67%; right: max(4%, calc(50% - 390px)); transform: rotate(9deg); animation-delay: -1.8s; }
+.neoFloatIcon7 { bottom: 5%; left: max(9%, calc(50% - 330px)); transform: rotate(8deg); animation-delay: -3s; }
+.neoFloatIcon8 { bottom: 5%; right: max(9%, calc(50% - 330px)); transform: rotate(-8deg); animation-delay: -4.2s; }
+@keyframes neoFloat { 0%,100% { translate: 0 0; } 50% { translate: 0 -13px; } }
+@media (prefers-reduced-motion: reduce) { .neoFloatIcon { animation: none; } }
+@media (max-width: 760px) {
+  .neoLoginPage { padding: 18px 12px 20px; overflow-y: auto; }
+  .neoLoginPage::before { width: 480px; height: 480px; top: 3%; }
+  .neoLoginShell { width: min(100%, 430px); gap: 12px; }
+  .neoBrand { gap: 6px; }
+  .neoBrand .enterpriseLogo { width: 58px; height: 58px; border-radius: 17px; }
+  .neoBrand h1 { font-size: 34px; }
+  .neoBrand p { margin-top: 5px; font-size: 12px; }
+  .neoLoginCard { padding: 20px 18px; border-radius: 22px; }
+  .neoLoginCard .enterpriseTitle p { margin-bottom: 16px; }
+  .neoFloatIcon { width: 48px; height: 48px; border-radius: 15px; opacity: .72; }
+  .neoFloatIcon svg { width: 24px; height: 24px; }
+  .neoFloatIcon1 { top: 7%; left: 4%; }
+  .neoFloatIcon2 { top: 8%; right: 4%; }
+  .neoFloatIcon3 { top: 40%; left: -18px; }
+  .neoFloatIcon4 { top: 41%; right: -18px; }
+  .neoFloatIcon5 { top: 73%; left: -15px; }
+  .neoFloatIcon6 { top: 72%; right: -15px; }
+  .neoFloatIcon7,.neoFloatIcon8 { display: none; }
+  .neoTrustGrid { gap: 5px; }
+  .neoTrustGrid > div { gap: 5px; }
+  .neoTrustGrid small { display: none; }
+}
+@media (max-height: 720px) and (max-width: 760px) {
+  .neoLoginPage { padding-top: 10px; }
+  .neoBrand .enterpriseLogo { width: 48px; height: 48px; }
+  .neoBrand h1 { font-size: 29px; }
+  .neoLoginCard { padding: 16px; }
+  .neoLoginCard .enterpriseTitle p { margin-bottom: 10px; }
+  .neoLoginCard .enterpriseFieldLabel { margin-top: 9px; }
+  .neoTrustGrid { margin-top: 13px; padding-top: 12px; }
+}
+/* ========================================
+   NEO LOGIN — FINAL SCROLL & SPACING FIX
+   ======================================== */
+
+html,
+body,
+#root {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+}
+
+html,
+body {
+  overflow-x: clip;
+}
+
+body:has(.neoLoginPage) {
+  overflow: hidden;
+}
+
+.neoLoginPage {
+  width: 100%;
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow-x: clip;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  contain: paint;
+}
+
+.neoLoginShell {
+  width: min(100%, 470px);
+  min-height: auto;
+  margin: 0 auto;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+
+.neoFooter {
+  margin-top: 0;
+  padding: 0 0 12px;
+}
+
+/* Decorative objects must not increase scroll height */
+.neoLoginPage::before,
+.neoLoginPage::after,
+.neoSkyline,
+.neoOrbit,
+.neoFloatIcon {
+  pointer-events: none;
+}
+
+@media (max-width: 760px) {
+  .neoLoginPage {
+    padding: 14px 12px max(14px, env(safe-area-inset-bottom));
+  }
+
+  .neoLoginShell {
+    width: min(100%, 430px);
+    gap: 10px;
+  }
+
+  .neoFooter {
+    padding-bottom: 6px;
+  }
+
+  .neoLoginPage::after {
+    bottom: -160px;
+    width: 380px;
+    height: 380px;
+  }
+}
+
+@media (max-width: 760px) and (max-height: 720px) {
+  .neoLoginPage {
+    padding-top: 8px;
+  }
+
+  .neoLoginShell {
+    gap: 7px;
+  }
+
+  .neoFooter {
+    padding-bottom: 2px;
+  }
+}
