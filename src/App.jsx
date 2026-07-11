@@ -1,11 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ref, onValue, set, push, update, remove } from "firebase/database";
+import { ref, onValue, set, push, update, remove, get } from "firebase/database";
 import { db } from "./firebase";
 import {
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
   sendPasswordResetEmail,
+  verifyBeforeUpdateEmail,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
 } from "firebase/auth";
 import { auth } from "./firebase";
 import "./App.css";
@@ -107,152 +110,60 @@ function phoneToEmail(phone = "") {
   return `${normalizePhone(phone)}@socioledger.local`;
 }
 
-function getAuthEmailPhone(authUser) {
-  const emailPhone = String(authUser?.email || "").split("@")[0];
-  return normalizePhone(authUser?.phoneNumber || emailPhone);
+/**
+ * Backward-compatible Firebase Auth aliases.
+ * Older SocioLedger users may have been created with a different synthetic
+ * email suffix. Keep all known variants here so mobile-number login remains
+ * compatible without changing existing Firebase Auth users.
+ */
+function getLoginEmailCandidates(phone = "") {
+  const normalizedPhone = normalizePhone(phone);
+
+  if (normalizedPhone.length !== 10) return [];
+
+  return [
+    `${normalizedPhone}@socioledger.local`,
+    `${normalizedPhone}@socioledger.com`,
+    `${normalizedPhone}@socioledger.in`,
+  ];
 }
 
-function idsToBooleanMap(value) {
-  const ids = [];
+function findLegacyUserProfile(usersValue, authUser) {
+  if (!usersValue || !authUser) return null;
 
-  if (Array.isArray(value)) {
-    value.filter(Boolean).forEach((id) => ids.push(String(id)));
-  } else if (value && typeof value === "object") {
-    Object.keys(value)
-      .filter((id) => value[id] === true || value[id] === "true" || value[id] === 1)
-      .forEach((id) => ids.push(String(id)));
-  } else if (value) {
-    ids.push(String(value));
-  }
+  const authEmail = String(authUser.email || "").trim().toLowerCase();
+  const authPhone = normalizePhone(authEmail.split("@")[0]);
 
-  return [...new Set(ids)].reduce((acc, id) => {
-    acc[id] = true;
-    return acc;
-  }, {});
-}
+  for (const [key, profileValue] of Object.entries(usersValue)) {
+    const profile = profileValue || {};
+    const profileUid = String(profile.uid || profile.authUid || "").trim();
+    const profileEmail = String(
+      profile.email || profile.loginEmail || profile.authEmail || ""
+    ).trim().toLowerCase();
+    const profilePhone = normalizePhone(
+      profile.phone || profile.mobile || profile.mobileNumber || ""
+    );
 
-function mergeFlatIdMaps(a, b) {
-  if (!a && !b) return undefined;
+    const keyPhone = normalizePhone(key);
+    const keyMatchesPhone =
+      key === `resident_${authPhone}` ||
+      key === `manager_${authPhone}` ||
+      (!!authPhone && keyPhone === authPhone);
 
-  const result = {};
-  const mergeOne = (value) => {
-    if (!value) return;
-
-    if (Array.isArray(value)) {
-      value.filter(Boolean).forEach((id) => {
-        result[String(id)] = true;
-      });
-      return;
-    }
-
-    if (typeof value === "object") {
-      Object.entries(value).forEach(([societyId, flatValue]) => {
-        if (flatValue === true || flatValue === "true" || flatValue === 1) {
-          result[String(societyId)] = true;
-          return;
-        }
-
-        if (flatValue && typeof flatValue === "object") {
-          result[String(societyId)] = {
-            ...(result[String(societyId)] && typeof result[String(societyId)] === "object"
-              ? result[String(societyId)]
-              : {}),
-            ...idsToBooleanMap(flatValue),
-          };
-        }
-      });
-    }
-  };
-
-  mergeOne(a);
-  mergeOne(b);
-  return result;
-}
-
-function mergeAuthProfiles(primary = {}, legacy = {}) {
-  const merged = {
-    ...legacy,
-    ...primary,
-  };
-
-  const mergedSocietyIds = idsToBooleanMap([
-    ...Object.keys(idsToBooleanMap(legacy.societyIds)),
-    ...Object.keys(idsToBooleanMap(primary.societyIds)),
-  ]);
-
-  if (Object.keys(mergedSocietyIds).length > 0) {
-    merged.societyIds = mergedSocietyIds;
-  }
-
-  const mergedFlatIds = mergeFlatIdMaps(legacy.flatIds, primary.flatIds);
-  if (mergedFlatIds) merged.flatIds = mergedFlatIds;
-
-  if (!merged.flatId) merged.flatId = primary.flatId || legacy.flatId || "";
-  if (primary.active === false) merged.active = false;
-
-  return merged;
-}
-
-function findUserProfileForAuth(usersMap, authUser, fallbackPhone = "") {
-  const uid = String(authUser?.uid || "");
-  const authEmail = String(authUser?.email || "").toLowerCase();
-  const authPhone = normalizePhone(fallbackPhone || getAuthEmailPhone(authUser));
-
-  if (!usersMap || !uid) return null;
-
-  const exactProfile = usersMap[uid] || null;
-  const entries = Object.entries(usersMap);
-  const legacyKeyMatches = [
-    authPhone,
-    `resident_${authPhone}`,
-    `manager_${authPhone}`,
-    `super_admin_${authPhone}`,
-  ].filter(Boolean);
-
-  let fallbackMatch = null;
-
-  for (const [key, profile] of entries) {
-    if (!profile || typeof profile !== "object" || key === uid) continue;
-
-    const profileUid = String(profile.uid || profile.authUid || profile.firebaseUid || "");
-    const profileEmail = String(profile.email || profile.loginEmail || "").toLowerCase();
-    const profilePhone = normalizePhone(profile.phone || profile.mobile || profile.contact || "");
-
-    if (profileUid && profileUid === uid) {
-      fallbackMatch = { key, profile, matchType: "uid_field" };
-      break;
-    }
-
-    if (authEmail && profileEmail && profileEmail === authEmail) {
-      fallbackMatch = { key, profile, matchType: "email" };
-      break;
-    }
-
-    if (authPhone && profilePhone && profilePhone === authPhone) {
-      fallbackMatch = { key, profile, matchType: "phone" };
-      break;
-    }
-
-    if (authPhone && legacyKeyMatches.includes(String(key))) {
-      fallbackMatch = { key, profile, matchType: "legacy_key" };
-      break;
+    if (
+      profileUid === authUser.uid ||
+      (!!authEmail && profileEmail === authEmail) ||
+      (!!authPhone && profilePhone === authPhone) ||
+      keyMatchesPhone
+    ) {
+      return {
+        key,
+        profile,
+      };
     }
   }
 
-  if (exactProfile && fallbackMatch) {
-    return {
-      key: uid,
-      legacyKey: fallbackMatch.key,
-      profile: mergeAuthProfiles(exactProfile, fallbackMatch.profile),
-      matchType: `uid_key+${fallbackMatch.matchType}`,
-    };
-  }
-
-  if (exactProfile) {
-    return { key: uid, legacyKey: "", profile: exactProfile, matchType: "uid_key" };
-  }
-
-  return fallbackMatch;
+  return null;
 }
 
 function getCurrentMonth() {
@@ -270,15 +181,6 @@ function formatMonth(monthKey) {
 
 function rupee(n) {
   return `₹${Number(n || 0).toLocaleString("en-IN")}`;
-}
-
-function escapeHtml(value = "") {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
 }
 
 function getExpenseMonth(expense) {
@@ -880,19 +782,27 @@ function downloadCSV(filename, rows) {
 }
 
 
-function LoginOrbitIcon({ type }) {
-  const common = { viewBox: "0 0 24 24", "aria-hidden": "true" };
-  const icons = {
-    key: <svg {...common}><circle cx="8" cy="12" r="3"/><path d="M11 12h10M17 12v3M20 12v2"/></svg>,
-    camera: <svg {...common}><path d="M4 7h11a3 3 0 013 3v7H4z"/><path d="M18 10l3-2v8l-3-2"/><circle cx="10" cy="12" r="2.5"/></svg>,
-    lift: <svg {...common}><rect x="5" y="4" width="14" height="16" rx="2"/><path d="M12 4v16M8 8l2-2 2 2M16 16l-2 2-2-2"/></svg>,
-    building: <svg {...common}><path d="M4 21V7l8-4 8 4v14"/><path d="M8 9h2M14 9h2M8 13h2M14 13h2M8 17h2M14 17h2M2 21h20"/></svg>,
-    rupee: <svg {...common}><circle cx="12" cy="12" r="9"/><path d="M8 7h8M8 10h8M9 7c4 0 5 5 0 5h-1l6 5"/></svg>,
-    users: <svg {...common}><circle cx="9" cy="9" r="3"/><circle cx="17" cy="10" r="2"/><path d="M3 20c0-4 3-6 6-6s6 2 6 6M15 15c3 0 5 2 5 5"/></svg>,
-    shield: <svg {...common}><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z"/><path d="M9 12l2 2 4-5"/></svg>,
-    door: <svg {...common}><path d="M5 21V4l11-2v19M5 21h14M12 12h.01"/></svg>,
+function NeoLoginIcon({ type, className = "" }) {
+  const common = {
+    viewBox: "0 0 24 24",
+    className,
+    "aria-hidden": "true",
   };
-  return icons[type] || icons.building;
+
+  if (type === "key") return <svg {...common}><circle cx="8" cy="12" r="3"/><path d="M11 12h9m-3 0v3m-3-3v2"/></svg>;
+  if (type === "camera") return <svg {...common}><path d="M3 7h12v10H3z"/><path d="m15 10 6-3v10l-6-3z"/><circle cx="9" cy="12" r="2.5"/></svg>;
+  if (type === "lift") return <svg {...common}><rect x="4" y="6" width="16" height="14" rx="2"/><path d="M12 6v14M8 3l-2 2m2-2 2 2m6 0 2-2m-2 2-2-2"/><circle cx="8" cy="12" r="1"/><circle cx="16" cy="12" r="1"/></svg>;
+  if (type === "building") return <svg {...common}><path d="M4 21V6l8-3v18M12 9h8v12M7 8h2m-2 4h2m-2 4h2m8-4h1m-1 4h1M2 21h20"/></svg>;
+  if (type === "rupee") return <svg {...common}><circle cx="12" cy="12" r="9"/><path d="M8 7h8M8 10h8M9 7c4 0 5 5 0 5l6 5"/></svg>;
+  if (type === "users") return <svg {...common}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
+  if (type === "shield") return <svg {...common}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-5"/></svg>;
+  if (type === "door") return <svg {...common}><path d="M4 21h16M6 21V4l10-2v19M16 5h3v16"/><circle cx="13" cy="12" r=".7"/></svg>;
+  if (type === "phone") return <svg {...common}><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M10 18h4"/></svg>;
+  if (type === "lock") return <svg {...common}><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>;
+  if (type === "eye") return <svg {...common}><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>;
+  if (type === "eyeOff") return <svg {...common}><path d="m3 3 18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 4.2A11 11 0 0 1 12 4c6.5 0 10 8 10 8a18 18 0 0 1-2 3M6.6 6.6C3.5 8.4 2 12 2 12s3.5 8 10 8a10 10 0 0 0 4.1-.9"/></svg>;
+  if (type === "bolt") return <svg {...common}><path d="m13 2-9 12h8l-1 8 9-12h-8z"/></svg>;
+  return null;
 }
 
 export default function App() {
@@ -904,7 +814,6 @@ export default function App() {
   const [loginPhone, setLoginPhone] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [showLoginPassword, setShowLoginPassword] = useState(false);
-  const [subscriptionLoaded, setSubscriptionLoaded] = useState(false);
   const [resetPhone, setResetPhone] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
@@ -996,132 +905,140 @@ useEffect(() => {
 
   let unsubUsers = () => {};
   let unsubSocieties = () => {};
+  let disposed = false;
 
-  const unsubUser = onValue(ref(db, "users"), (snapshot) => {
-    const usersMap = snapshot.val() || {};
-    const foundUser = findUserProfileForAuth(usersMap, authUser, loginPhone);
-    const profile = foundUser?.profile || null;
+  const attachProfile = async () => {
+    setLoading(true);
 
-    if (!profile || profile.active === false) {
-      setUser(null);
-      setLoading(false);
-      return;
-    }
+    try {
+      const directSnapshot = await get(ref(db, `users/${authUser.uid}`));
+      let profile = directSnapshot.val();
+      let legacyProfileKey = "";
 
-    const authPhone = getAuthEmailPhone(authUser);
-    const loggedUser = {
-      ...profile,
-      id: authUser.uid,
-      uid: authUser.uid,
-      legacyUserKey: foundUser.key,
-      legacyMatchType: foundUser.matchType,
-      phone: normalizePhone(profile.phone || authPhone),
-      role: normalizeRole(profile.role),
-    };
+      if (!profile) {
+        const usersSnapshot = await get(ref(db, "users"));
+        const legacyMatch = findLegacyUserProfile(usersSnapshot.val() || {}, authUser);
 
-    setUser((previousUser) => {
-      // Realtime profile listeners may fire again after self-heal/profile updates.
-      // Reset navigation only for a genuinely new login, not on every DB refresh.
-      if (!previousUser || previousUser.id !== loggedUser.id) {
-        setActiveTab("dashboard");
+        if (legacyMatch) {
+          legacyProfileKey = legacyMatch.key;
+          profile = legacyMatch.profile;
+        }
       }
-      return loggedUser;
-    });
 
-    // Self-heal legacy profiles: old production users were stored as
-    // users/resident_<phone>, users/manager, numeric keys, etc. The app now
-    // also keeps a UID-key profile so the next login resolves directly.
-    if ((foundUser.key !== authUser.uid && !usersMap[authUser.uid]) || foundUser.legacyKey) {
-      update(ref(db, `users/${authUser.uid}`), {
+      if (disposed) return;
+
+      if (!profile || profile.active === false) {
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+
+      const loggedUser = {
         ...profile,
         id: authUser.uid,
         uid: authUser.uid,
-        legacyUserKey: foundUser.legacyKey || foundUser.key,
-        legacyMatchType: foundUser.matchType,
-        phone: normalizePhone(profile.phone || authPhone),
         role: normalizeRole(profile.role),
-        migratedToUidAt: Date.now(),
-        updatedAt: Date.now(),
-      }).catch((error) => {
-        console.warn("User profile self-heal skipped", error);
-      });
-    }
-
-    const loginSocietyIds = getUserSocietyIds(loggedUser);
-
-    unsubSocieties();
-    unsubUsers();
-
-    if (loggedUser.role === roles.SUPER_ADMIN) {
-      unsubSocieties = onValue(ref(db, "societies"), (societySnapshot) => {
-        const societies = normalizeSocieties(societySnapshot.val() || {}).sort((a, b) =>
-          String(a.name || "").localeCompare(String(b.name || ""))
-        );
-
-        setData((prev) => ({
-          ...prev,
-          societies,
-        }));
-
-        setSelectedSocietyId((prev) => prev || societies[0]?.id || "default_society");
-      });
-
-      unsubUsers = onValue(ref(db, "users"), (usersSnapshot) => {
-        const users = normalizeList(usersSnapshot.val() || [])
-          .map((item) => ({ ...item, role: normalizeRole(item.role) }))
-          .sort((a, b) =>
-            String(a.name || a.phone || "").localeCompare(String(b.name || b.phone || ""))
-          );
-
-        setData((prev) => ({
-          ...prev,
-          users,
-        }));
-      });
-    } else {
-      const societyUnsubs = loginSocietyIds.map((societyId) =>
-        onValue(ref(db, `societies/${societyId}/profile`), (societySnapshot) => {
-          const societyProfile = societySnapshot.val();
-
-          setData((prev) => {
-            const withoutCurrent = prev.societies.filter((s) => s.id !== societyId);
-            const nextSocieties = societyProfile
-              ? [...withoutCurrent, { id: societyId, ...societyProfile }]
-              : withoutCurrent;
-
-            return {
-              ...prev,
-              societies: nextSocieties.sort((a, b) =>
-                String(a.name || "").localeCompare(String(b.name || ""))
-              ),
-            };
-          });
-        })
-      );
-
-      unsubSocieties = () => {
-        societyUnsubs.forEach((unsubscribe) => unsubscribe());
       };
 
-      if (loginSocietyIds[0]) {
-        setSelectedSocietyId(loginSocietyIds[0]);
+      setUser(loggedUser);
+
+      // Production-safe self-heal: preserve the legacy record and also create
+      // the canonical UID-keyed profile so future logins are direct.
+      if (legacyProfileKey && legacyProfileKey !== authUser.uid) {
+        update(ref(db, `users/${authUser.uid}`), {
+          ...profile,
+          id: authUser.uid,
+          uid: authUser.uid,
+          legacyProfileKey,
+          updatedAt: Date.now(),
+        }).catch((error) => {
+          console.warn("User profile self-heal skipped", error);
+        });
+      }
+
+      const loginSocietyIds = getUserSocietyIds(loggedUser);
+
+      unsubSocieties();
+      unsubUsers();
+
+      if (loggedUser.role === roles.SUPER_ADMIN) {
+        unsubSocieties = onValue(ref(db, "societies"), (societySnapshot) => {
+          const societies = normalizeSocieties(societySnapshot.val() || {}).sort((a, b) =>
+            String(a.name || "").localeCompare(String(b.name || ""))
+          );
+
+          setData((prev) => ({
+            ...prev,
+            societies,
+          }));
+
+          setSelectedSocietyId((prev) => prev || societies[0]?.id || "default_society");
+        });
+
+        unsubUsers = onValue(ref(db, "users"), (usersSnapshot) => {
+          const users = normalizeList(usersSnapshot.val() || [])
+            .map((item) => ({ ...item, role: normalizeRole(item.role) }))
+            .sort((a, b) =>
+              String(a.name || a.phone || "").localeCompare(String(b.name || b.phone || ""))
+            );
+
+          setData((prev) => ({
+            ...prev,
+            users,
+          }));
+        });
+      } else {
+        const societyUnsubs = loginSocietyIds.map((societyId) =>
+          onValue(ref(db, `societies/${societyId}/profile`), (societySnapshot) => {
+            const societyProfile = societySnapshot.val();
+
+            setData((prev) => {
+              const withoutCurrent = prev.societies.filter((s) => s.id !== societyId);
+              const nextSocieties = societyProfile
+                ? [...withoutCurrent, { id: societyId, ...societyProfile }]
+                : withoutCurrent;
+
+              return {
+                ...prev,
+                societies: nextSocieties.sort((a, b) =>
+                  String(a.name || "").localeCompare(String(b.name || ""))
+                ),
+              };
+            });
+          })
+        );
+
+        unsubSocieties = () => {
+          societyUnsubs.forEach((unsubscribe) => unsubscribe());
+        };
+
+        if (loginSocietyIds[0]) {
+          setSelectedSocietyId(loginSocietyIds[0]);
+        }
+      }
+
+      // Do not force dashboard on every realtime/profile refresh.
+      setLoading(false);
+    } catch (error) {
+      console.error("Unable to load user profile", error);
+      if (!disposed) {
+        setUser(null);
+        setLoading(false);
       }
     }
+  };
 
-    setLoading(false);
-  });
+  attachProfile();
 
   return () => {
-    unsubUser();
+    disposed = true;
     unsubSocieties();
     unsubUsers();
   };
-}, [authReady, authUser, loginPhone]);
+}, [authReady, authUser]);
 
 useEffect(() => {
   if (!authUser || !user || !selectedSocietyId) return;
-
-  setSubscriptionLoaded(false);
 
   if (!canAccessSociety(user, selectedSocietyId)) {
     alert("You do not have access to this society.");
@@ -1194,7 +1111,6 @@ useEffect(() => {
         ...prev,
         subscription: snapshot.val() || null,
       }));
-      setSubscriptionLoaded(true);
     }
   );
 
@@ -1296,7 +1212,10 @@ useEffect(() => {
   }, [societyData, activeFlats.length]);
 
   const dashboardMonthlyExpense = useMemo(() => {
-    const expenses = societyData.expenses.filter((expense) => getExpenseMonth(expense) === dashboardMonth);
+    const expenses = societyData.expenses.filter(
+      (expense) => getExpenseMonth(expense) === dashboardMonth
+    );
+
     const categoryTotals = expenses.reduce((acc, expense) => {
       const key = expense.category || "General";
       acc[key] = (acc[key] || 0) + Number(expense.amount || 0);
@@ -1310,13 +1229,19 @@ useEffect(() => {
     return {
       month: dashboardMonth,
       expenses,
-      total: expenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0),
+      total: expenses.reduce(
+        (sum, expense) => sum + Number(expense.amount || 0),
+        0
+      ),
       categories,
     };
   }, [societyData.expenses, dashboardMonth]);
 
   const expenseMonthSummary = useMemo(() => {
-    const monthExpenses = societyData.expenses.filter((expense) => getExpenseMonth(expense) === expenseMonth);
+    const monthExpenses = societyData.expenses.filter(
+      (expense) => getExpenseMonth(expense) === expenseMonth
+    );
+
     const categoryTotals = monthExpenses.reduce((acc, expense) => {
       const key = expense.category || "General";
       acc[key] = (acc[key] || 0) + Number(expense.amount || 0);
@@ -1327,12 +1252,19 @@ useEffect(() => {
       .map(([category, amount]) => ({ category, amount }))
       .sort((a, b) => b.amount - a.amount);
 
-    const filteredExpenses = expenseCategoryFilter === "All"
-      ? monthExpenses
-      : monthExpenses.filter((expense) => (expense.category || "General") === expenseCategoryFilter);
+    const filteredExpenses =
+      expenseCategoryFilter === "All"
+        ? monthExpenses
+        : monthExpenses.filter(
+            (expense) =>
+              (expense.category || "General") === expenseCategoryFilter
+          );
 
     return {
-      total: monthExpenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0),
+      total: monthExpenses.reduce(
+        (sum, expense) => sum + Number(expense.amount || 0),
+        0
+      ),
       categories,
       expenses: monthExpenses,
       filteredExpenses,
@@ -1408,62 +1340,120 @@ useEffect(() => {
     subscriptionAccess.blocked;
 
   async function login() {
-  const rawPhone = String(loginPhone || "").replace(/\D/g, "");
+    const identifier = String(loginPhone || "").trim().toLowerCase();
+    const password = loginPassword.trim();
 
-  if (rawPhone.length !== 10) {
-    alert("Please enter a valid 10-digit mobile number.");
-    return;
-  }
+    if (!identifier) {
+      alert("Please enter your registered mobile number or personal email.");
+      return;
+    }
 
-  if (!loginPassword.trim()) {
-    alert("Please enter your password.");
-    return;
-  }
+    if (!password) {
+      alert("Please enter your password.");
+      return;
+    }
 
-  try {
-    await signInWithEmailAndPassword(
-      auth,
-      phoneToEmail(rawPhone),
-      loginPassword.trim()
+    const isEmail = identifier.includes("@");
+    const rawPhone = normalizePhone(identifier);
+
+    if (!isEmail && rawPhone.length !== 10) {
+      alert("Please enter a valid 10-digit mobile number or email address.");
+      return;
+    }
+
+    const emailCandidates = isEmail
+      ? [identifier]
+      : getLoginEmailCandidates(rawPhone);
+
+    let lastError = null;
+
+    for (const email of emailCandidates) {
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+        return;
+      } catch (error) {
+        lastError = error;
+
+        const retryableCodes = [
+          "auth/invalid-credential",
+          "auth/user-not-found",
+          "auth/wrong-password",
+          "auth/invalid-login-credentials",
+        ];
+
+        if (!retryableCodes.includes(error?.code)) {
+          console.error(error);
+          break;
+        }
+      }
+    }
+
+    console.error(lastError);
+
+    if (
+      lastError?.code === "auth/too-many-requests" ||
+      lastError?.code === "auth/user-disabled"
+    ) {
+      alert(lastError.code);
+      return;
+    }
+
+    alert(
+      "Login failed. Check the mobile/email and password. Residents who changed their Authentication email must log in with their verified personal email."
     );
-  } catch (error) {
-    console.error(error);
-    alert(error.code || "Invalid mobile/password. Please check details.");
   }
-}
 
 async function requestPasswordReset() {
-  const rawPhone = normalizePhone(resetPhone || loginPhone);
+  const identifier = String(resetPhone || loginPhone || "").trim().toLowerCase();
+  const isEmail = identifier.includes("@");
+  const rawPhone = normalizePhone(identifier);
 
-  if (rawPhone.length !== 10) {
-    alert("Please enter your registered 10-digit mobile number.");
+  if (!identifier || (!isEmail && rawPhone.length !== 10)) {
+    alert("Please enter your registered personal email or 10-digit mobile number.");
     return;
   }
 
   setResetLoading(true);
 
   try {
+    const emailCandidates = isEmail
+      ? [identifier]
+      : getLoginEmailCandidates(rawPhone);
+
+    let resetSent = false;
+    let lastMailError = null;
+
+    for (const email of emailCandidates) {
+      try {
+        await sendPasswordResetEmail(auth, email);
+        resetSent = true;
+        break;
+      } catch (mailError) {
+        lastMailError = mailError;
+        console.warn(`Firebase reset email skipped for ${email}`, mailError);
+      }
+    }
+
     await push(ref(db, "passwordResetRequests"), {
-      mobile: rawPhone,
-      phone: rawPhone,
-      loginEmail: phoneToEmail(rawPhone),
-      status: "pending",
+      identifier,
+      mobile: isEmail ? "" : rawPhone,
+      phone: isEmail ? "" : rawPhone,
+      requestedEmail: isEmail ? identifier : "",
+      status: resetSent ? "email_sent" : "pending_manual_help",
       source: "login_page",
       createdAt: Date.now(),
     });
 
-    try {
-      await sendPasswordResetEmail(auth, phoneToEmail(rawPhone));
-    } catch (mailError) {
-      console.warn("Firebase reset email skipped/failed", mailError);
-    }
+    if (!resetSent) throw lastMailError || new Error("Reset email could not be sent.");
 
-    alert("Password reset request submitted successfully. The manager or super admin will update you.");
+    alert("Password reset email sent. Please check your inbox and spam folder.");
     setResetPhone("");
     setResetOpen(false);
   } catch (error) {
     console.error(error);
-    alert("Unable to submit reset request. Please try again.");
+    alert(
+      "Reset email could not be sent. If your Authentication email was changed, enter that verified personal email instead of the mobile number."
+    );
   } finally {
     setResetLoading(false);
   }
@@ -1700,6 +1690,73 @@ async function toggleSocietyStatus(society) {
     active: society.active === false ? true : false,
     updatedAt: Date.now(),
   });
+}
+
+async function deleteSociety(society) {
+  if (!isSuperAdmin()) {
+    alert("Only Super Admin can delete a society.");
+    return;
+  }
+
+  if (!society?.id) return;
+
+  if (society.id === "default_society") {
+    alert("Happy Homes / default society is protected and cannot be deleted from the app.");
+    return;
+  }
+
+  const typedName = window.prompt(
+    `This permanently deletes ${society.name} and all its flats, payments, expenses, rates, settings and subscription data.\n\nType the society name exactly to continue:`
+  );
+
+  if (typedName !== String(society.name || "")) {
+    if (typedName !== null) alert("Society name did not match. Nothing was deleted.");
+    return;
+  }
+
+  const finalConfirm = window.confirm(
+    `Final confirmation: permanently delete ${society.name}? This cannot be undone.`
+  );
+  if (!finalConfirm) return;
+
+  const usersSnapshot = await get(ref(db, "users"));
+  const usersValue = usersSnapshot.val() || {};
+  const atomicUpdates = {
+    [`societies/${society.id}`]: null,
+  };
+
+  Object.entries(usersValue).forEach(([userId, profile]) => {
+    if (!profile) return;
+
+    if (profile.societyIds?.[society.id] !== undefined) {
+      atomicUpdates[`users/${userId}/societyIds/${society.id}`] = null;
+    }
+
+    const linkedFlatMap = profile.flatIds?.[society.id];
+    if (linkedFlatMap !== undefined) {
+      const linkedFlatIds = normalizeBooleanMapIds(linkedFlatMap);
+      atomicUpdates[`users/${userId}/flatIds/${society.id}`] = null;
+
+      if (profile.flatId && linkedFlatIds.includes(String(profile.flatId))) {
+        atomicUpdates[`users/${userId}/flatId`] = null;
+      }
+    }
+  });
+
+  await update(ref(db), atomicUpdates);
+
+  if (selectedSocietyId === society.id) {
+    const fallbackSociety = data.societies.find((item) => item.id !== society.id);
+    setSelectedSocietyId(fallbackSociety?.id || "default_society");
+    setSelectedFlatId("");
+    setActiveTab("dashboard");
+  }
+
+  if (societyForm.id === society.id) {
+    setSocietyForm({ id: "", name: "", address: "" });
+  }
+
+  alert("Society and its linked user assignments were deleted successfully.");
 }
 
 async function markSocietyPaid(society) {
@@ -2154,73 +2211,6 @@ async function saveFlat() {
     downloadCSV(`SocioLedger_Payment_Status_${monthlyStatus.month}.csv`, rows);
   }
 
-  function exportStatusPDF() {
-    const societyName = data.societies.find((s) => s.id === selectedSocietyId)?.name || "SocioLedger";
-    const overdueRows = monthlyStatus.rows.filter((row) => Number(row.netPayable || row.due || 0) > 0);
-    const generatedAt = new Date().toLocaleString("en-IN");
-    const rowsHtml = monthlyStatus.rows
-      .map((row) => {
-        const isOverdue = Number(row.netPayable || row.due || 0) > 0;
-        return `
-          <tr class="${isOverdue ? "overdue" : ""}">
-            <td>${escapeHtml(row.flat.flatNo || "-")}</td>
-            <td>${escapeHtml(row.flat.ownerName || "-")}</td>
-            <td>${rupee(row.charge)}</td>
-            <td>${rupee(row.paid)}</td>
-            <td>${rupee(row.due)}</td>
-            <td>${rupee(row.totalDue)}</td>
-            <td>${rupee(row.advanceAdjusted)}</td>
-            <td>${rupee(row.advance)}</td>
-            <td>${rupee(row.netPayable)}</td>
-            <td>${escapeHtml(row.status)}</td>
-          </tr>`;
-      })
-      .join("");
-
-    const html = `<!doctype html>
-<html>
-<head>
-  <title>SocioLedger Payment Status - ${escapeHtml(formatMonth(monthlyStatus.month))}</title>
-  <style>
-    *{box-sizing:border-box} body{font-family:Inter,Arial,sans-serif;margin:0;color:#0f172a;background:#f8fafc} .page{padding:24px}
-    .header{display:flex;align-items:center;justify-content:space-between;gap:16px;background:linear-gradient(135deg,#071427,#0f766e);color:#fff;border-radius:20px;padding:20px 24px;margin-bottom:18px}
-    .brand{display:flex;align-items:center;gap:12px}.brand img{width:54px;height:54px;border-radius:16px;background:#fff;padding:4px}.brand h1{margin:0;font-size:28px}.brand p{margin:4px 0 0;color:#c7fff2}
-    .meta{text-align:right;font-size:12px;color:#dbeafe}.summary{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:14px 0 18px}.box{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:12px}.box span{display:block;font-size:11px;color:#64748b;text-transform:uppercase;font-weight:800}.box b{font-size:20px}.danger{color:#dc2626}.success{color:#059669}
-    table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;font-size:11px} th{background:#f1f5f9;text-align:left;color:#334155;text-transform:uppercase;font-size:10px;letter-spacing:.04em} th,td{padding:9px;border-bottom:1px solid #e2e8f0} tr.overdue{background:#fff1f2;color:#b91c1c;font-weight:800} tr.overdue td{border-bottom-color:#fecdd3}.footer{margin-top:16px;display:flex;justify-content:space-between;font-size:12px;color:#64748b}.watermark{position:fixed;inset:auto 24px 14px auto;color:#94a3b8;font-size:11px}
-    @page{size:A4 landscape;margin:10mm}
-  </style>
-</head>
-<body>
-  <div class="page">
-    <div class="header">
-      <div class="brand"><img src="${logo}"/><div><h1>SocioLedger</h1><p>${escapeHtml(societyName)} · ${escapeHtml(formatMonth(monthlyStatus.month))} payment status</p></div></div>
-      <div class="meta">Generated: ${escapeHtml(generatedAt)}<br/>Weekly share report</div>
-    </div>
-    <div class="summary">
-      <div class="box"><span>Paid</span><b class="success">${monthlyStatus.paidCount}</b></div>
-      <div class="box"><span>Partial</span><b>${monthlyStatus.partialCount}</b></div>
-      <div class="box"><span>Pending</span><b class="danger">${monthlyStatus.pendingCount}</b></div>
-      <div class="box"><span>Month Due</span><b class="danger">${rupee(monthlyStatus.totalMonthDue)}</b></div>
-      <div class="box"><span>Net Payable</span><b>${rupee(monthlyStatus.totalNetPayable)}</b></div>
-    </div>
-    <table><thead><tr><th>Flat</th><th>Resident</th><th>Charge</th><th>Paid</th><th>Month Due</th><th>Total Due</th><th>Advance Used</th><th>Advance Left</th><th>Net Payable</th><th>Status</th></tr></thead><tbody>${rowsHtml}</tbody></table>
-    <div class="footer"><span>Overdue rows are highlighted in red and bold.</span><b>Powered by WinFly</b></div>
-  </div>
-  <script>window.onload = () => { window.print(); };</script>
-</body>
-</html>`;
-
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) {
-      alert("Please allow pop-ups to generate PDF.");
-      return;
-    }
-    printWindow.document.open();
-    printWindow.document.write(html);
-    printWindow.document.close();
-  }
-
-
   if (!authReady) {
     return (
       <div className="loginPage">
@@ -2234,44 +2224,48 @@ async function saveFlat() {
     }
 
   if (!user) {
+    const floatingIcons = ["key", "camera", "lift", "building", "rupee", "users", "shield", "door"];
+
     return (
-      <div className="loginPage enterpriseLoginPage neoLoginPage">
-        <div className="neoSkyline" aria-hidden="true"></div>
+      <div className="neoLoginPage">
+        <div className="neoSkyline" aria-hidden="true" />
+        <div className="neoParticles" aria-hidden="true" />
         <div className="neoOrbit" aria-hidden="true">
-          {['key','camera','lift','building','rupee','users','shield','door'].map((type, index) => (
-            <span key={type} className={`neoFloatIcon neoFloatIcon${index + 1}`}>
-              <LoginOrbitIcon type={type} />
-            </span>
+          {floatingIcons.map((iconType, index) => (
+            <div key={iconType} className={`neoFloatIcon neoFloatIcon${index + 1}`}>
+              <NeoLoginIcon type={iconType} />
+            </div>
           ))}
         </div>
-        <main className="enterpriseLoginShell neoLoginShell">
-          <section className="enterpriseBrand neoBrand" aria-label="SocioLedger login">
+
+        <main className="neoLoginShell">
+          <section className="neoBrand" aria-label="SocioLedger login">
             <img src={logo} alt="SocioLedger Logo" className="enterpriseLogo" />
-            <div>
-              <h1>Socio<span>Ledger</span></h1>
-              <p>Smart Society Management</p>
-            </div>
+            <h1><strong>Socio</strong><span>Ledger</span></h1>
+            <div className="neoBrandRule"><i /><b /><i /></div>
+            <p>Smart Society Management</p>
           </section>
 
           <section className="enterpriseLoginCard neoLoginCard">
-            <div className="enterpriseTitle">
-              <span>Secure access</span>
-              <h2>Welcome back</h2>
-              <p>Manage maintenance, payments and society updates in one place.</p>
+            <div className="enterpriseTitle neoCardTitle">
+              <div className="neoTitleIcon"><NeoLoginIcon type="building" /></div>
+              <div>
+                <h2>Welcome Back</h2>
+                <p>Login to continue to your account</p>
+              </div>
             </div>
 
-            <label className="enterpriseFieldLabel" htmlFor="login-mobile">Mobile number</label>
-            <div className="enterpriseInputRow">
-              <span className="enterprisePrefix">+91</span>
+            <label className="enterpriseFieldLabel" htmlFor="login-mobile">Mobile Number or Email</label>
+            <div className="enterpriseInputRow neoInputRow">
+              <span className="enterprisePrefix neoPhoneIcon"><NeoLoginIcon type="phone" /></span>
+              {!loginPhone.includes("@") && <b className="neoCountryCode">+91</b>}
               <input
                 id="login-mobile"
                 value={loginPhone}
-                onChange={(e) => setLoginPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                placeholder="9876543210"
-                inputMode="numeric"
+                onChange={(e) => setLoginPhone(e.target.value.slice(0, 120))}
+                placeholder="Mobile number or personal email"
+                inputMode="email"
                 autoComplete="username"
-                maxLength={10}
-                autoFocus
                 onKeyDown={(e) => {
                   if (e.key === "Enter") login();
                 }}
@@ -2279,7 +2273,8 @@ async function saveFlat() {
             </div>
 
             <label className="enterpriseFieldLabel" htmlFor="login-password">Password</label>
-            <div className="enterpriseInputRow enterprisePasswordRow">
+            <div className="enterpriseInputRow neoInputRow neoPasswordRow">
+              <span className="enterprisePrefix"><NeoLoginIcon type="lock" /></span>
               <input
                 id="login-password"
                 type={showLoginPassword ? "text" : "password"}
@@ -2293,76 +2288,70 @@ async function saveFlat() {
               />
               <button
                 type="button"
-                className="enterpriseEyeButton"
+                className="enterpriseEyeButton neoEyeButton"
                 onClick={() => setShowLoginPassword((show) => !show)}
                 aria-label={showLoginPassword ? "Hide password" : "Show password"}
+                title={showLoginPassword ? "Hide password" : "Show password"}
               >
-                {showLoginPassword ? (
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M10.6 10.7a2 2 0 002.7 2.7M9.9 4.3A10.7 10.7 0 0112 4c5.2 0 8.7 4 9.6 5.2.5.6.5 1.4 0 2C21 12 19.8 13.4 18 14.7M6.2 6.2C4.3 7.4 3.1 9 2.4 9.9a1.8 1.8 0 000 2.2C3.3 13.3 6.8 17 12 17c1 0 1.9-.1 2.8-.4" /></svg>
-                ) : (
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.4 9.9C3.3 8.7 6.8 5 12 5s8.7 3.7 9.6 4.9c.5.6.5 1.4 0 2C20.7 13.1 17.2 17 12 17S3.3 13.1 2.4 11.9a1.7 1.7 0 010-2z" /><circle cx="12" cy="11" r="3" /></svg>
-                )}
+                <NeoLoginIcon type={showLoginPassword ? "eyeOff" : "eye"} />
               </button>
             </div>
 
             <div className="enterpriseLoginMeta">
-              <label><input type="checkbox" readOnly checked /> Keep me signed in</label>
-              <button type="button" onClick={() => { setResetPhone(loginPhone); setResetOpen(true); }}>Forgot password?</button>
+              <label className="neoRemember"><input type="checkbox" readOnly checked /><span>Remember Me</span></label>
+              <button
+                type="button"
+                onClick={() => {
+                  setResetPhone(loginPhone);
+                  setResetOpen(true);
+                }}
+              >
+                Forgot Password?
+              </button>
             </div>
 
-            <button className="enterpriseLoginButton neoLoginButton" onClick={login}><span>Sign in</span><b aria-hidden="true">→</b></button>
+            <button className="enterpriseLoginButton neoLoginButton" onClick={login}>
+              <span>Login</span><b>→</b>
+            </button>
+
             <div className="neoTrustGrid">
-              <div><LoginOrbitIcon type="shield" /><span><b>Secure</b><small>Protected access</small></span></div>
-              <div><LoginOrbitIcon type="building" /><span><b>Society-wide</b><small>One connected system</small></span></div>
-              <div><LoginOrbitIcon type="users" /><span><b>Role-based</b><small>Resident to admin</small></span></div>
+              <div><NeoLoginIcon type="shield" /><span><b>Secure</b><small>Your data is protected</small></span></div>
+              <div><NeoLoginIcon type="bolt" /><span><b>Fast</b><small>Built for reliability</small></span></div>
+              <div><NeoLoginIcon type="users" /><span><b>Society-wide</b><small>One solution for all</small></span></div>
             </div>
           </section>
 
-          <footer className="enterpriseFooter neoFooter">Powered by <b>WinFly</b><small>Trusted society operations platform</small></footer>
+          <footer className="neoFooter">
+            <div>Powered by <b>WinFly</b></div>
+            <small>▣ Trusted society operations platform</small>
+          </footer>
         </main>
 
         {resetOpen && (
-          <div className="enterpriseModalBackdrop" role="presentation" onClick={() => setResetOpen(false)}>
-            <section className="enterpriseResetModal" role="dialog" aria-modal="true" aria-labelledby="reset-title" onClick={(e) => e.stopPropagation()}>
+          <div className="enterpriseModalOverlay" onClick={() => setResetOpen(false)}>
+            <section className="enterpriseResetModal neoResetModal" onClick={(e) => e.stopPropagation()}>
               <button className="enterpriseModalClose" type="button" onClick={() => setResetOpen(false)} aria-label="Close">×</button>
-              <span className="enterpriseModalEyebrow">Account recovery</span>
-              <h2 id="reset-title">Reset your password</h2>
-              <p>Enter your registered mobile number. Your request will be sent to the society administrator.</p>
-              <label className="enterpriseFieldLabel" htmlFor="reset-mobile">Registered mobile number</label>
+              <span className="enterpriseModalEyebrow">Account assistance</span>
+              <h2>Password Reset</h2>
+              <p>Enter your verified personal email. Legacy accounts may also try their registered mobile number.</p>
+              <label className="enterpriseFieldLabel" htmlFor="reset-mobile">Personal Email or Mobile</label>
               <div className="enterpriseInputRow">
-                <span className="enterprisePrefix">+91</span>
-                <input id="reset-mobile" value={resetPhone} onChange={(e) => setResetPhone(e.target.value.replace(/\D/g, "").slice(0, 10))} placeholder="9876543210" inputMode="numeric" maxLength={10} autoFocus />
+                <span className="enterprisePrefix">@</span>
+                <input
+                  id="reset-mobile"
+                  value={resetPhone}
+                  onChange={(e) => setResetPhone(e.target.value.slice(0, 120))}
+                  placeholder="name@example.com"
+                  inputMode="email"
+                  autoComplete="email"
+                />
               </div>
-              <div className="enterpriseModalActions">
-                <button type="button" className="enterpriseSecondaryButton" onClick={() => setResetOpen(false)}>Cancel</button>
-                <button type="button" className="enterprisePrimaryButton" onClick={requestPasswordReset} disabled={resetLoading}>{resetLoading ? "Submitting..." : "Submit request"}</button>
-              </div>
+              <button className="enterpriseLoginButton" type="button" onClick={requestPasswordReset} disabled={resetLoading}>
+                {resetLoading ? "Submitting..." : "Submit Request"}
+              </button>
             </section>
           </div>
         )}
-      </div>
-    );
-  }
-
-  if (
-    user &&
-    normalizeRole(user.role) !== roles.SUPER_ADMIN &&
-    selectedSocietyId &&
-    subscriptionLoaded &&
-    subscriptionAccess.blocked
-  ) {
-    return (
-      <div className="subscriptionGatePage">
-        <SubscriptionBlocked
-          subscriptionAccess={subscriptionAccess}
-          onLogout={logout}
-          societies={allowedSocieties}
-          selectedSocietyId={selectedSocietyId}
-          onSocietyChange={(societyId) => {
-            setSelectedSocietyId(societyId);
-            setSelectedFlatId("");
-          }}
-        />
       </div>
     );
   }
@@ -2722,6 +2711,15 @@ async function saveFlat() {
                         >
                           Block Subscription
                         </button>
+
+                        <button
+                          className="dangerBtn societyDeleteBtn"
+                          onClick={() => deleteSociety(society)}
+                          disabled={society.id === "default_society"}
+                          title={society.id === "default_society" ? "Protected primary society" : "Permanently delete society"}
+                        >
+                          Delete Society
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -2742,9 +2740,19 @@ async function saveFlat() {
             <div className="dashboardToolbar">
               <div>
                 <span>Expense month</span>
-                <input type="month" value={dashboardMonth} onChange={(e) => setDashboardMonth(e.target.value)} />
+                <input
+                  type="month"
+                  value={dashboardMonth}
+                  onChange={(e) => setDashboardMonth(e.target.value)}
+                />
               </div>
-              <button type="button" className="ghostBtn" onClick={() => openExpenseCategory("All", dashboardMonth)}>View expense details</button>
+              <button
+                type="button"
+                className="ghostBtn"
+                onClick={() => openExpenseCategory("All", dashboardMonth)}
+              >
+                View expense details
+              </button>
             </div>
 
             <div className="cards">
@@ -2753,7 +2761,10 @@ async function saveFlat() {
               <div className="card danger"><span>Total Due</span><b>{rupee(dashboard.totalDue)}</b></div>
               <div className="card success"><span>Advance</span><b>{rupee(dashboard.totalAdvance)}</b></div>
               <div className="card"><span>Total Collection</span><b>{rupee(dashboard.collection)}</b></div>
-              <div className="card danger"><span>{formatMonth(dashboardMonth)} Expense</span><b>{rupee(dashboardMonthlyExpense.total)}</b></div>
+              <div className="card danger">
+                <span>{formatMonth(dashboardMonth)} Expense</span>
+                <b>{rupee(dashboardMonthlyExpense.total)}</b>
+              </div>
               <div className={dashboard.netBalance >= 0 ? "card success" : "card danger"}>
                 <span>Net Balance</span><b>{rupee(dashboard.netBalance)}</b>
               </div>
@@ -2767,21 +2778,34 @@ async function saveFlat() {
                 </div>
                 <b>{rupee(dashboardMonthlyExpense.total)}</b>
               </div>
+
               <div className="expenseCategoryGrid">
                 {dashboardMonthlyExpense.categories.length > 0 ? (
                   dashboardMonthlyExpense.categories.map((item) => (
-                    <button key={item.category} type="button" className="expenseCategoryCard" onClick={() => openExpenseCategory(item.category, dashboardMonth)}>
+                    <button
+                      key={item.category}
+                      type="button"
+                      className="expenseCategoryCard"
+                      onClick={() =>
+                        openExpenseCategory(item.category, dashboardMonth)
+                      }
+                    >
                       <span>{item.category}</span>
                       <b>{rupee(item.amount)}</b>
                     </button>
                   ))
                 ) : (
-                  <div className="emptyMini">No expenses recorded for this month.</div>
+                  <div className="emptyMini">
+                    No expenses recorded for this month.
+                  </div>
                 )}
               </div>
             </section>
 
-            <section className="dashboardPromoPanel" aria-label="SocioLedger and VIORA apps">
+            <section
+              className="dashboardPromoPanel"
+              aria-label="SocioLedger and VIORA apps"
+            >
               <div className="promoProduct promoSocioLedger">
                 <div className="promoLogoWrap">
                   <img src={socioLedgerIcon} alt="SocioLedger" />
@@ -2789,7 +2813,10 @@ async function saveFlat() {
                 <div className="promoCopy">
                   <span className="promoEyebrow">Society Management OS</span>
                   <h2>SocioLedger</h2>
-                  <p>Smart society dashboard for flats, dues, collections, expenses, ledger and resident transparency.</p>
+                  <p>
+                    Smart society dashboard for flats, dues, collections,
+                    expenses, ledger and resident transparency.
+                  </p>
                   <div className="promoChips">
                     <span>Maintenance</span>
                     <span>Ledger</span>
@@ -2807,7 +2834,10 @@ async function saveFlat() {
                 <div className="promoCopy">
                   <span className="promoEyebrow">Wellness Companion</span>
                   <h2>VIORA</h2>
-                  <p>AI wellness, yoga, meditation, hydration and healthy habit companion for better everyday living.</p>
+                  <p>
+                    AI wellness, yoga, meditation, hydration and healthy habit
+                    companion for better everyday living.
+                  </p>
                   <div className="promoChips">
                     <span>AI Coach</span>
                     <span>Yoga</span>
@@ -2970,7 +3000,6 @@ async function saveFlat() {
             <div className="formGrid">
               <input type="month" value={statusMonth} onChange={(e) => setStatusMonth(e.target.value)} />
               {canManage() && <button onClick={exportStatusCSV}>Export Status CSV</button>}
-              {canManage() && <button onClick={exportStatusPDF}>Generate PDF</button>}
             </div>
 
             <div className="cards">
@@ -2985,31 +3014,31 @@ async function saveFlat() {
               <div className="card warning"><span>Net Payable</span><b>{rupee(monthlyStatus.totalNetPayable)}</b></div>
             </div>
 
-            <div className="tableWrap mobileCardTable statusTableWrap">
+            <div className="tableWrap">
               <table>
                 <thead>
                   <tr>
-                    <th>Flat</th><th>Resident</th><th>Charge</th><th>Paid</th><th>Month Due</th><th>Total Due</th><th>Advance Used</th><th>Advance Left</th><th>Net Payable</th><th>Status</th><th>Pay</th>
+                    <th>Flat</th><th>Resident</th><th>Month Charge</th><th>Paid Adjusted</th><th>Month Due</th><th>Gross Total Due</th><th>Advance Adjusted</th><th>Remaining Advance</th><th>Net Payable</th><th>Status</th><th>Pay</th>
                   </tr>
                 </thead>
                 <tbody>
                   {monthlyStatus.rows.map((row) => (
-                    <tr key={row.flat.id} className={row.netPayable > 0 ? "overdueRow" : ""}>
-                      <td data-label="Flat">{row.flat.flatNo || "-"}</td>
-                      <td data-label="Resident">{row.flat.ownerName || "-"}</td>
-                      <td data-label="Charge">{rupee(row.charge)}</td>
-                      <td data-label="Paid">{rupee(row.paid)}</td>
-                      <td data-label="Month Due">{rupee(row.due)}</td>
-                      <td data-label="Total Due">{rupee(row.totalDue)}</td>
-                      <td data-label="Advance Used">{rupee(row.advanceAdjusted)}</td>
-                      <td data-label="Advance Left">{rupee(row.advance)}</td>
-                      <td data-label="Net Payable">{rupee(row.netPayable)}</td>
-                      <td data-label="Status">
+                    <tr key={row.flat.id}>
+                      <td>{row.flat.flatNo || "-"}</td>
+                      <td>{row.flat.ownerName || "-"}</td>
+                      <td>{rupee(row.charge)}</td>
+                      <td>{rupee(row.paid)}</td>
+                      <td>{rupee(row.due)}</td>
+                      <td>{rupee(row.totalDue)}</td>
+                      <td>{rupee(row.advanceAdjusted)}</td>
+                      <td>{rupee(row.advance)}</td>
+                      <td>{rupee(row.netPayable)}</td>
+                      <td>
                         <span className={row.status === "Paid" ? "status paid" : row.status === "Partial" ? "status partial" : "status pending"}>
                           {row.status}
                         </span>
                       </td>
-                      <td data-label="Pay">
+                      <td>
                         {canShowPayButton(row.flat) && row.netPayable > 0 ? (
                           <button className="payBtn smallBtn" onClick={() => setPayModalFlatId(row.flat.id)}>Pay</button>
                         ) : (
@@ -3036,11 +3065,39 @@ async function saveFlat() {
             <div className="expenseControlPanel">
               <div className="monthFilterBox">
                 <label>Expense Month</label>
-                <input type="month" value={expenseMonth} onChange={(e) => { setExpenseMonth(e.target.value); setExpenseCategoryFilter("All"); }} />
+                <input
+                  type="month"
+                  value={expenseMonth}
+                  onChange={(e) => {
+                    setExpenseMonth(e.target.value);
+                    setExpenseCategoryFilter("All");
+                  }}
+                />
               </div>
-              <button type="button" className={expenseCategoryFilter === "All" ? "filterPill active" : "filterPill"} onClick={() => setExpenseCategoryFilter("All")}>All · {rupee(expenseMonthSummary.total)}</button>
+
+              <button
+                type="button"
+                className={
+                  expenseCategoryFilter === "All"
+                    ? "filterPill active"
+                    : "filterPill"
+                }
+                onClick={() => setExpenseCategoryFilter("All")}
+              >
+                All · {rupee(expenseMonthSummary.total)}
+              </button>
+
               {expenseMonthSummary.categories.map((item) => (
-                <button key={item.category} type="button" className={expenseCategoryFilter === item.category ? "filterPill active" : "filterPill"} onClick={() => setExpenseCategoryFilter(item.category)}>
+                <button
+                  key={item.category}
+                  type="button"
+                  className={
+                    expenseCategoryFilter === item.category
+                      ? "filterPill active"
+                      : "filterPill"
+                  }
+                  onClick={() => setExpenseCategoryFilter(item.category)}
+                >
                   {item.category} · {rupee(item.amount)}
                 </button>
               ))}
@@ -3048,28 +3105,91 @@ async function saveFlat() {
 
             {canManage() && (
               <div className="formGrid expenseFormGrid">
-                <input type="number" placeholder="Amount" value={expenseForm.amount} onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })} />
-                <select value={expenseForm.category} onChange={(e) => setExpenseForm({ ...expenseForm, category: e.target.value })}>
-                  <option>General</option><option>Electricity</option><option>Water</option><option>Lift</option><option>Cleaning</option><option>Security</option><option>Repair</option><option>Salary</option><option>Other</option>
+                <input
+                  type="number"
+                  placeholder="Amount"
+                  value={expenseForm.amount}
+                  onChange={(e) =>
+                    setExpenseForm({ ...expenseForm, amount: e.target.value })
+                  }
+                />
+                <select
+                  value={expenseForm.category}
+                  onChange={(e) =>
+                    setExpenseForm({ ...expenseForm, category: e.target.value })
+                  }
+                >
+                  <option>General</option>
+                  <option>Electricity</option>
+                  <option>Water</option>
+                  <option>Lift</option>
+                  <option>Cleaning</option>
+                  <option>Security</option>
+                  <option>Repair</option>
+                  <option>Salary</option>
+                  <option>Other</option>
                 </select>
-                <input type="date" value={expenseForm.date} onChange={(e) => setExpenseForm({ ...expenseForm, date: e.target.value })} />
-                <input placeholder="Note / Vendor / Bill details" value={expenseForm.note} onChange={(e) => setExpenseForm({ ...expenseForm, note: e.target.value })} />
+                <input
+                  type="date"
+                  value={expenseForm.date}
+                  onChange={(e) =>
+                    setExpenseForm({ ...expenseForm, date: e.target.value })
+                  }
+                />
+                <input
+                  placeholder="Note / Vendor / Bill details"
+                  value={expenseForm.note}
+                  onChange={(e) =>
+                    setExpenseForm({ ...expenseForm, note: e.target.value })
+                  }
+                />
                 <button onClick={addExpense}>Add Expense</button>
               </div>
             )}
 
             <div className="tableWrap mobileCardTable expenseTableWrap">
               <table>
-                <thead><tr><th>Date</th><th>Category</th><th>Amount</th><th>Note</th><th>Added By</th><th>Action</th></tr></thead>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Category</th>
+                    <th>Amount</th>
+                    <th>Note</th>
+                    <th>Added By</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {expenseMonthSummary.filteredExpenses.map((expense) => (
                     <tr key={expense.id}>
-                      <td data-label="Date">{expense.date}</td><td data-label="Category">{expense.category}</td><td data-label="Amount">{rupee(expense.amount)}</td><td data-label="Note">{expense.note || "-"}</td><td data-label="Added By">{expense.createdBy || "-"}</td>
-                      <td data-label="Action">{isSuperAdmin() ? <button className="dangerBtn" onClick={() => deleteExpense(expense.id)}>Delete</button> : "-"}</td>
+                      <td data-label="Date">{expense.date}</td>
+                      <td data-label="Category">{expense.category}</td>
+                      <td data-label="Amount">{rupee(expense.amount)}</td>
+                      <td data-label="Note">{expense.note || "-"}</td>
+                      <td data-label="Added By">
+                        {expense.createdBy || "-"}
+                      </td>
+                      <td data-label="Action">
+                        {isSuperAdmin() ? (
+                          <button
+                            className="dangerBtn"
+                            onClick={() => deleteExpense(expense.id)}
+                          >
+                            Delete
+                          </button>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
                     </tr>
                   ))}
+
                   {expenseMonthSummary.filteredExpenses.length === 0 && (
-                    <tr><td data-label="Status" colSpan="6">No expenses found for this selection.</td></tr>
+                    <tr>
+                      <td data-label="Status" colSpan="6">
+                        No expenses found for this selection.
+                      </td>
+                    </tr>
                   )}
                 </tbody>
               </table>
@@ -3134,7 +3254,7 @@ async function saveFlat() {
         )}
 
         {activeTab === "profile" && currentRole === roles.RESIDENT && selectedFlat && (
-          <ResidentProfile user={user} flat={selectedFlat} society={data.societies.find((s) => s.id === selectedSocietyId)} data={societyData} />
+          <ResidentProfile user={user} authUser={authUser} flat={selectedFlat} society={data.societies.find((s) => s.id === selectedSocietyId)} data={societyData} />
         )}
 
         {activeTab === "paymentSetup" && canManage() && (
@@ -3203,17 +3323,91 @@ async function saveFlat() {
 }
 
 
-function ResidentProfile({ user, flat, society, data }) {
+function ResidentProfile({ user, authUser, flat, society, data }) {
   const ledger = buildLedger(flat, data);
   const currentMonthInfo = getMonthPaymentInfo(flat, data, getCurrentMonth());
   const linkedMobile = normalizePhone(flat.phone || user?.phone);
+  const [newEmail, setNewEmail] = useState(user?.personalEmail || "");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [emailSaving, setEmailSaving] = useState(false);
+
+  async function requestEmailUpdate() {
+    const email = String(newEmail || "").trim().toLowerCase();
+    const firebaseUser = auth.currentUser;
+
+    if (!firebaseUser) {
+      alert("Please log in again before updating the email.");
+      return;
+    }
+
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
+      alert("Please enter a valid personal email address.");
+      return;
+    }
+
+    if (!currentPassword) {
+      alert("Enter your current password to confirm this sensitive change.");
+      return;
+    }
+
+    if (String(firebaseUser.email || "").toLowerCase() === email) {
+      alert("This email is already linked to your Firebase Authentication account.");
+      return;
+    }
+
+    setEmailSaving(true);
+
+    try {
+      const credential = EmailAuthProvider.credential(
+        firebaseUser.email,
+        currentPassword
+      );
+
+      await reauthenticateWithCredential(firebaseUser, credential);
+
+      await verifyBeforeUpdateEmail(firebaseUser, email, {
+        url: window.location.origin,
+        handleCodeInApp: false,
+      });
+
+      await update(ref(db, `users/${firebaseUser.uid}`), {
+        personalEmail: email,
+        pendingEmail: email,
+        emailUpdateStatus: "verification_sent",
+        emailUpdateRequestedAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+
+      setCurrentPassword("");
+      alert(
+        "Verification email sent. Open the link in your inbox. After verification, use your personal email to log in and reset the password."
+      );
+    } catch (error) {
+      console.error("Email update failed", error);
+
+      if (error?.code === "auth/email-already-in-use") {
+        alert("This email is already used by another account.");
+      } else if (
+        error?.code === "auth/wrong-password" ||
+        error?.code === "auth/invalid-credential"
+      ) {
+        alert("Current password is incorrect.");
+      } else if (error?.code === "auth/requires-recent-login") {
+        alert("Please log out, log in again, and retry the email update.");
+      } else {
+        alert(error?.message || "Unable to send email verification.");
+      }
+    } finally {
+      setEmailSaving(false);
+    }
+  }
 
   return (
     <>
       <div className="pageHeader profileHeader">
         <div>
           <h1>My Profile</h1>
-          <p>Flat owner profile, login mobile aur current ledger summary.</p>
+          <p>Flat owner profile, login details and current ledger summary.</p>
         </div>
       </div>
 
@@ -3230,12 +3424,58 @@ function ResidentProfile({ user, flat, society, data }) {
         <section className="profileCard">
           <h3>Contact & Login</h3>
           <div className="profileRows">
-            <div><span>Login Mobile</span><b>{linkedMobile || "-"}</b></div>
+            <div><span>Registered Mobile</span><b>{linkedMobile || "-"}</b></div>
+            <div><span>Authentication Email</span><b>{authUser?.email || "-"}</b></div>
             <div><span>Owner Name</span><b>{flat.ownerName || user?.name || "-"}</b></div>
             <div><span>Flat No</span><b>{flat.flatNo || "-"}</b></div>
             <div><span>Society</span><b>{society?.name || "-"}</b></div>
           </div>
-          <p className="hintText">Mobile number change karna ho to manager se request karein, kyunki login isi mobile se linked hai.</p>
+        </section>
+
+        <section className="profileCard emailUpdateCard">
+          <div className="profileSectionHeading">
+            <div>
+              <h3>Personal Email & Password Reset</h3>
+              <p>Link a verified personal email directly with Firebase Authentication.</p>
+            </div>
+            <span className="emailSecurityBadge">Verified flow</span>
+          </div>
+
+          <label>New personal email</label>
+          <input
+            type="email"
+            value={newEmail}
+            onChange={(event) => setNewEmail(event.target.value)}
+            placeholder="name@example.com"
+            autoComplete="email"
+          />
+
+          <label>Current password</label>
+          <input
+            type="password"
+            value={currentPassword}
+            onChange={(event) => setCurrentPassword(event.target.value)}
+            placeholder="Confirm current password"
+            autoComplete="current-password"
+          />
+
+          <button
+            type="button"
+            onClick={requestEmailUpdate}
+            disabled={emailSaving}
+          >
+            {emailSaving ? "Sending verification..." : "Verify & Update Email"}
+          </button>
+
+          {user?.pendingEmail && (
+            <p className="emailPendingNote">
+              Verification pending: <b>{user.pendingEmail}</b>
+            </p>
+          )}
+
+          <p className="hintText emailImportantNote">
+            Important: after verifying the new email, Firebase will use that email as your login identifier. Use the personal email—not the mobile number—for future login and password reset.
+          </p>
         </section>
 
         <section className="profileCard">
@@ -3358,28 +3598,15 @@ function EmptyState({ title, text }) {
   );
 }
 
-function SubscriptionBlocked({ subscriptionAccess, onLogout, societies = [], selectedSocietyId = "", onSocietyChange }) {
+function SubscriptionBlocked({ subscriptionAccess, onLogout }) {
   return (
-    <div className="subscriptionGateCard">
-      <img src={logo} alt="SocioLedger" className="subscriptionGateLogo" />
-      <span className="subscriptionGateEyebrow">Society access paused</span>
-      <h3>Subscription Required</h3>
+    <div className="emptyState">
+      <h3>Trial Expired / Subscription Required</h3>
 
       <p>
-        This society's subscription has expired or has been blocked. All manager
-        and resident access for this society is temporarily disabled.
+        Is society ka 15 days trial complete ho gaya hai. App continue use karne
+        ke liye subscription payment required hai.
       </p>
-
-      {societies.length > 1 && onSocietyChange && (
-        <label className="subscriptionSocietySwitch">
-          <span>Switch society</span>
-          <select value={selectedSocietyId} onChange={(e) => onSocietyChange(e.target.value)}>
-            {societies.map((society) => (
-              <option key={society.id} value={society.id}>{society.name}</option>
-            ))}
-          </select>
-        </label>
-      )}
 
       <div className="cards">
         <div className="card danger">
@@ -3394,11 +3621,11 @@ function SubscriptionBlocked({ subscriptionAccess, onLogout, societies = [], sel
       </div>
 
       <p className="hintText">
-        Please contact the Super Admin or SocioLedger support to renew the society subscription.
+        Please Super Admin / SocioLedger team se contact karke payment update karwayein.
       </p>
 
-      <button className="subscriptionLogoutBtn" onClick={onLogout}>
-        Sign Out
+      <button className="dangerBtn" onClick={onLogout}>
+        Logout
       </button>
     </div>
   );
