@@ -128,13 +128,25 @@ function getLoginEmailCandidates(phone = "") {
   ];
 }
 
-function findLegacyUserProfile(usersValue, authUser) {
+function findLegacyUserProfile(usersValue, authUser, profileHint = null) {
   if (!usersValue || !authUser) return null;
 
   const authEmail = String(authUser.email || "").trim().toLowerCase();
-  const authPhone = normalizePhone(authEmail.split("@")[0]);
+  const hintedEmail = String(
+    profileHint?.email || profileHint?.loginEmail || profileHint?.authEmail || ""
+  ).trim().toLowerCase();
+
+  const authPhone = normalizePhone(
+    profileHint?.phone ||
+      profileHint?.mobile ||
+      profileHint?.mobileNumber ||
+      authUser.phoneNumber ||
+      authEmail.split("@")[0]
+  );
 
   for (const [key, profileValue] of Object.entries(usersValue)) {
+    if (key === authUser.uid) continue;
+
     const profile = profileValue || {};
     const profileUid = String(profile.uid || profile.authUid || "").trim();
     const profileEmail = String(
@@ -153,6 +165,7 @@ function findLegacyUserProfile(usersValue, authUser) {
     if (
       profileUid === authUser.uid ||
       (!!authEmail && profileEmail === authEmail) ||
+      (!!hintedEmail && profileEmail === hintedEmail) ||
       (!!authPhone && profilePhone === authPhone) ||
       keyMatchesPhone
     ) {
@@ -164,6 +177,57 @@ function findLegacyUserProfile(usersValue, authUser) {
   }
 
   return null;
+}
+
+function mergeBooleanMaps(...values) {
+  const merged = {};
+
+  values.forEach((value) => {
+    normalizeBooleanMapIds(value).forEach((id) => {
+      merged[String(id)] = true;
+    });
+  });
+
+  return merged;
+}
+
+function mergeFlatIdMaps(...values) {
+  const merged = {};
+
+  values.forEach((value) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return;
+
+    Object.entries(value).forEach(([societyId, flatIds]) => {
+      merged[societyId] = {
+        ...(merged[societyId] || {}),
+        ...mergeBooleanMaps(flatIds),
+      };
+    });
+  });
+
+  return merged;
+}
+
+function mergeUserProfiles(legacyProfile, directProfile) {
+  const legacy = legacyProfile || {};
+  const direct = directProfile || {};
+
+  return {
+    ...legacy,
+    ...direct,
+    societyIds: mergeBooleanMaps(
+      legacy.societyIds,
+      legacy.societyId,
+      legacy.assignedSocietyId,
+      legacy.assignedSocieties,
+      direct.societyIds,
+      direct.societyId,
+      direct.assignedSocietyId,
+      direct.assignedSocieties
+    ),
+    flatIds: mergeFlatIdMaps(legacy.flatIds, direct.flatIds),
+    flatId: direct.flatId || legacy.flatId || "",
+  };
 }
 
 function getCurrentMonth() {
@@ -331,7 +395,24 @@ function normalizeBooleanMapIds(value) {
 }
 
 function getUserSocietyIds(user) {
-  return normalizeBooleanMapIds(user?.societyIds);
+  const ids = new Set();
+
+  [
+    user?.societyIds,
+    user?.societyId,
+    user?.assignedSocietyId,
+    user?.assignedSocieties,
+    user?.societies,
+    user?.buildingId,
+  ].forEach((value) => {
+    normalizeBooleanMapIds(value).forEach((id) => ids.add(String(id)));
+  });
+
+  if (user?.flatIds && typeof user.flatIds === "object" && !Array.isArray(user.flatIds)) {
+    Object.keys(user.flatIds).forEach((societyId) => ids.add(String(societyId)));
+  }
+
+  return Array.from(ids);
 }
 
 function canAccessSociety(user, societyId) {
@@ -911,23 +992,25 @@ useEffect(() => {
     setLoading(true);
 
     try {
-      const directSnapshot = await get(ref(db, `users/${authUser.uid}`));
-      let profile = directSnapshot.val();
-      let legacyProfileKey = "";
+      const [directSnapshot, usersSnapshot] = await Promise.all([
+        get(ref(db, `users/${authUser.uid}`)),
+        get(ref(db, "users")),
+      ]);
 
-      if (!profile) {
-        const usersSnapshot = await get(ref(db, "users"));
-        const legacyMatch = findLegacyUserProfile(usersSnapshot.val() || {}, authUser);
+      const directProfile = directSnapshot.val();
+      const usersValue = usersSnapshot.val() || {};
+      const legacyMatch = findLegacyUserProfile(usersValue, authUser, directProfile);
+      const legacyProfileKey = legacyMatch?.key || "";
 
-        if (legacyMatch) {
-          legacyProfileKey = legacyMatch.key;
-          profile = legacyMatch.profile;
-        }
-      }
+      // A manager may have a canonical UID profile created by a later auth
+      // migration while the original manager record still owns societyIds.
+      // Merge both records instead of treating the incomplete UID record as
+      // authoritative and silently removing manager access.
+      const profile = mergeUserProfiles(legacyMatch?.profile, directProfile);
 
       if (disposed) return;
 
-      if (!profile || profile.active === false) {
+      if (!profile || Object.keys(profile).length === 0 || profile.active === false) {
         setUser(null);
         setLoading(false);
         return;
@@ -942,8 +1025,8 @@ useEffect(() => {
 
       setUser(loggedUser);
 
-      // Production-safe self-heal: preserve the legacy record and also create
-      // the canonical UID-keyed profile so future logins are direct.
+      // Production-safe self-heal: persist merged role/society assignments to
+      // the canonical UID record. The legacy record is intentionally retained.
       if (legacyProfileKey && legacyProfileKey !== authUser.uid) {
         update(ref(db, `users/${authUser.uid}`), {
           ...profile,
@@ -957,6 +1040,14 @@ useEffect(() => {
       }
 
       const loginSocietyIds = getUserSocietyIds(loggedUser);
+
+      if (loggedUser.role === roles.MANAGER && loginSocietyIds.length === 0) {
+        console.error("Manager has no society assignment after profile merge", {
+          uid: authUser.uid,
+          phone: loggedUser.phone,
+          legacyProfileKey,
+        });
+      }
 
       unsubSocieties();
       unsubUsers();
