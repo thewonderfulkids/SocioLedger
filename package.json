@@ -8,6 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "backup:data": "node scripts/backupFirebaseData.js",
     "migrate:saas": "node scripts/migrateToSaas.js",
     "sync:residents": "node scripts/createResidentUsersFromFlats.js",
     "apply:trial": "node scripts/apply15DayTrial.js",
