@@ -17,7 +17,7 @@ requirePattern(
 );
 requirePattern(
   "selected society must be checked before realtime subscriptions",
-  /useEffect\(\(\) => \{[\s\S]*?if \(!canAccessSociety\(user, selectedSocietyId\)\)[\s\S]*?You do not have access to this society/[\s\S]*?const basePath = societyPath\(selectedSocietyId\)/
+  /useEffect\(\(\) => \{[\s\S]*?if \(!canAccessSociety\(user, selectedSocietyId\)\)[\s\S]*?You do not have access to this society[\s\S]*?const basePath = societyPath\(selectedSocietyId\)/
 );
 requirePattern(
   "Manager society list must be filtered by assigned society IDs",
