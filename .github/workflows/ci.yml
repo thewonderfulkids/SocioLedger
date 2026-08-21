@@ -28,6 +28,9 @@ jobs:
       - name: Production data safety audit
         run: npm run audit:safety
 
+      - name: Destructive action protection audit
+        run: npm run audit:destructive
+
       - name: Dependency audit (diagnostic)
         continue-on-error: true
         run: npm audit --audit-level=high
