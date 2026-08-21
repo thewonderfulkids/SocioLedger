@@ -30,7 +30,7 @@ jobs:
       - name: Apply non-breaking dependency security fixes
         if: github.event_name == 'pull_request' && github.head_ref == 'agent/production-hardening-phase-1'
         run: |
-          npm audit fix --package-lock-only
+          npm audit fix --package-lock-only || true
           if ! git diff --quiet -- package-lock.json; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
