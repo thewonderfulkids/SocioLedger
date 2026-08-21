@@ -31,6 +31,9 @@ jobs:
       - name: Destructive action protection audit
         run: npm run audit:destructive
 
+      - name: Access regression audit
+        run: npm run audit:access
+
       - name: Dependency audit (diagnostic)
         continue-on-error: true
         run: npm audit --audit-level=high
