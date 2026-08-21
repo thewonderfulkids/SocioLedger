@@ -25,6 +25,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Production data safety audit
+        run: npm run audit:safety
+
       - name: Dependency audit (diagnostic)
         continue-on-error: true
         run: npm audit --audit-level=high
