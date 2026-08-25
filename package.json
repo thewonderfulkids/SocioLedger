@@ -13,6 +13,7 @@
     "audit:safety": "node scripts/auditSafetyInvariants.js",
     "audit:destructive": "node scripts/auditDestructiveActions.js",
     "audit:access": "node scripts/auditAccessGuards.js",
+    "audit:architecture": "node scripts/auditArchitectureBoundaries.js",
     "migrate:saas": "node scripts/migrateToSaas.js",
     "sync:residents": "node scripts/createResidentUsersFromFlats.js",
     "apply:trial": "node scripts/apply15DayTrial.js",
