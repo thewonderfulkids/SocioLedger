@@ -34,6 +34,9 @@ jobs:
       - name: Access regression audit
         run: npm run audit:access
 
+      - name: Architecture boundary audit
+        run: npm run audit:architecture
+
       - name: Dependency audit (diagnostic)
         continue-on-error: true
         run: npm audit --audit-level=high
