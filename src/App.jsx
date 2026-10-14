@@ -68,7 +68,6 @@ const seedUsers = {
     phone: "8888888888",
     role: roles.MANAGER,
     name: "Manager",
-    password: "123456",
     societyIds: ["default_society"],
   },
 };
@@ -1025,9 +1024,23 @@ useEffect(() => {
 
       setUser(loggedUser);
 
-      // Production-safe self-heal: persist merged role/society assignments to
-      // the canonical UID record. The legacy record is intentionally retained.
-      if (legacyProfileKey && legacyProfileKey !== authUser.uid) {
+      // Persist legacy permissions only when the legacy record has a strong
+      // identity binding to this Firebase Auth user. Phone/key-only matches are
+      // still allowed for backward-compatible in-memory access, but they must
+      // never silently persist roles or society assignments to a canonical UID.
+      const legacyProfile = legacyMatch?.profile || {};
+      const legacyUid = String(legacyProfile.uid || legacyProfile.authUid || "").trim();
+      const legacyEmail = String(
+        legacyProfile.email || legacyProfile.loginEmail || legacyProfile.authEmail || ""
+      ).trim().toLowerCase();
+      const authenticatedEmail = String(authUser.email || "").trim().toLowerCase();
+      const canPersistLegacyProfile =
+        legacyProfileKey &&
+        legacyProfileKey !== authUser.uid &&
+        (legacyUid === authUser.uid ||
+          (!!authenticatedEmail && legacyEmail === authenticatedEmail));
+
+      if (canPersistLegacyProfile) {
         update(ref(db, `users/${authUser.uid}`), {
           ...profile,
           id: authUser.uid,
@@ -3049,7 +3062,13 @@ async function saveFlat() {
                 <option>Cheque</option>
               </select>
 
-              <input type="date" value={paymentForm.date} onChange={(e) => setPaymentForm({ ...paymentForm, date: e.target.value })} />
+              <input
+                type="date"
+                value={paymentForm.date}
+                onChange={(e) => setPaymentForm({ ...paymentForm, date: e.target.value })}
+                onClick={(e) => e.currentTarget.showPicker?.()}
+                aria-label="Payment date"
+              />
               <input type="month" value={paymentForm.forMonth} onChange={(e) => setPaymentForm({ ...paymentForm, forMonth: e.target.value })} />
               <input placeholder="Note" value={paymentForm.note} onChange={(e) => setPaymentForm({ ...paymentForm, note: e.target.value })} />
               <button onClick={addPayment}>Save Payment</button>

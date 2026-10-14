@@ -23,3 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 serviceAccountKey.json
+
+# Production data backups must never be committed
+backups/

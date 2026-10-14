@@ -1,0 +1,48 @@
+name: SocioLedger CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Production data safety audit
+        run: npm run audit:safety
+
+      - name: Destructive action protection audit
+        run: npm run audit:destructive
+
+      - name: Access regression audit
+        run: npm run audit:access
+
+      - name: Architecture boundary audit
+        run: npm run audit:architecture
+
+      - name: Dependency audit (diagnostic)
+        continue-on-error: true
+        run: npm audit --audit-level=high
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
