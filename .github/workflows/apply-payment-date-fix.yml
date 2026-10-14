@@ -1,0 +1,32 @@
+name: Apply payment date fix
+
+on:
+  push:
+    branches:
+      - agent/production-hardening-phase-1
+    paths:
+      - '.github/workflows/apply-payment-date-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/production-hardening-phase-1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Patch payment date input
+        run: node scripts/patch-payment-date-picker.mjs
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.jsx
+          git diff --cached --quiet && exit 0
+          git commit -m "Fix mobile payment date editing"
+          git push
