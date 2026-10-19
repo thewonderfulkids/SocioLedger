@@ -3049,7 +3049,14 @@ async function saveFlat() {
                 <option>Cheque</option>
               </select>
 
-              <input type="date" value={paymentForm.date} onChange={(e) => setPaymentForm({ ...paymentForm, date: e.target.value })} />
+              <input
+      type="text"
+      inputMode="numeric"
+      placeholder="YYYY-MM-DD"
+      value={paymentForm.date}
+      onChange={(e) => setPaymentForm({ ...paymentForm, date: e.target.value })}
+      aria-label="Payment date (YYYY-MM-DD)"
+    />
               <input type="month" value={paymentForm.forMonth} onChange={(e) => setPaymentForm({ ...paymentForm, forMonth: e.target.value })} />
               <input placeholder="Note" value={paymentForm.note} onChange={(e) => setPaymentForm({ ...paymentForm, note: e.target.value })} />
               <button onClick={addPayment}>Save Payment</button>
