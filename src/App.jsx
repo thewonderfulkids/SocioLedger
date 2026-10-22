@@ -1,3 +1,5 @@
+import PaymentSetupPanel from "./PaymentSetupPanel.jsx";
+import { paymentSetupRequest } from "./payment-setup-client.js";
 import { buildYearlyAuditRows, serializeCSV } from "./audit.js";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ref, onValue, set, push, update, remove, get } from "firebase/database";
@@ -942,11 +944,7 @@ export default function App() {
     note: "",
   });
 
-  const [paymentSettingsForm, setPaymentSettingsForm] = useState({
-    upiId: "",
-    qrImage: "",
-  });
-
+  const [secureReceiver, setSecureReceiver] = useState(null);
   const [societyForm, setSocietyForm] = useState({
     id: "",
     name: "",
@@ -1217,13 +1215,16 @@ useEffect(() => {
 }, [authUser, user, selectedSocietyId]);
 
   useEffect(() => {
-    // Synchronize this editable draft with realtime Firebase settings.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setPaymentSettingsForm({
-      upiId: data.paymentSettings?.upiId || "",
-      qrImage: data.paymentSettings?.qrImage || "",
+    if (!authUser || !selectedSocietyId) return;
+    let cancelled = false;
+    paymentSetupRequest(auth, selectedSocietyId, null, true).then(result => {
+      if (!cancelled) setSecureReceiver({ societyId: selectedSocietyId, public: result.public });
+    }).catch(() => {
+      if (!cancelled) setSecureReceiver({ societyId: selectedSocietyId, public: { version: 1, mode: "disabled", active: false } });
     });
-  }, [data.paymentSettings?.upiId, data.paymentSettings?.qrImage]);
+    return () => { cancelled = true; };
+  }, [authUser, selectedSocietyId]);
+  const activeReceiver = secureReceiver?.societyId === selectedSocietyId ? secureReceiver.public : { version: 1, mode: "disabled", active: false };
 
   function createFirebaseId(path) {
     return push(ref(db, path)).key;
@@ -1238,7 +1239,19 @@ useEffect(() => {
     return normalizeRole(user?.role) === roles.SUPER_ADMIN;
   }
 
+  async function openPaymentForFlat(flatId) {
+    try {
+      const result = await paymentSetupRequest(auth, selectedSocietyId, null, true);
+      setSecureReceiver({ societyId: selectedSocietyId, public: result.public });
+      if (!result.public.active) return alert("Payments are not enabled for this society yet.");
+      setPayModalFlatId(flatId);
+    } catch {
+      alert("Receiving details could not be verified. Please try again before paying.");
+    }
+  }
+
   function canShowPayButton(flat) {
+    if (activeReceiver && !activeReceiver.active) return false;
     if (normalizeRole(user?.role) !== roles.RESIDENT) return false;
     return isFlatLinkedToUser(flat, user, authUser, selectedSocietyId);
   }
@@ -2207,50 +2220,8 @@ async function saveFlat() {
     await remove(ref(db, societyPath(selectedSocietyId, `expenses/${id}`)));
   }
 
-  function handleQrUpload(event) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith("image/")) {
-      alert("Only image file upload karo.");
-      return;
-    }
-
-    if (file.size > 900 * 1024) {
-      alert("QR image 900KB se kam rakho. Image compress karke upload karo.");
-      event.target.value = "";
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      setPaymentSettingsForm((prev) => ({
-        ...prev,
-        qrImage: reader.result,
-      }));
-    };
-    reader.readAsDataURL(file);
-  }
-
-  async function savePaymentSettings() {
-    if (!canManage()) {
-      alert("Only Super Admin / Manager can update payment settings.");
-      return;
-    }
-
-    await set(ref(db, societyPath(selectedSocietyId, "paymentSettings")), {
-      upiId: paymentSettingsForm.upiId.trim(),
-      qrImage: paymentSettingsForm.qrImage || "",
-      gatewayEnabled: data.paymentSettings?.gatewayEnabled || false,
-      updatedBy: user?.name || "",
-      updatedAt: Date.now(),
-    });
-
-    alert("Payment settings updated.");
-  }
-
   function copyUpiId() {
-    const upiId = data.paymentSettings?.upiId || "";
+    const upiId = activeReceiver ? (activeReceiver.active ? activeReceiver.upiId : "") : data.paymentSettings?.upiId || "";
     if (!upiId) {
       alert("Manager ne UPI ID add nahi ki hai.");
       return;
@@ -3192,7 +3163,7 @@ async function saveFlat() {
                       </td>
                       <td>
                         {canShowPayButton(row.flat) && row.netPayable > 0 ? (
-                          <button className="payBtn smallBtn" onClick={() => setPayModalFlatId(row.flat.id)}>Pay</button>
+                          <button className="payBtn smallBtn" onClick={() => openPaymentForFlat(row.flat.id)}>Pay</button>
                         ) : (
                           <span className="mutedText">-</span>
                         )}
@@ -3406,7 +3377,7 @@ async function saveFlat() {
                     data={societyData}
                     whatsappLink={getWhatsAppLink(selectedFlat)}
                     showPayButton={canShowPayButton(selectedFlat)}
-                    onPay={() => setPayModalFlatId(selectedFlat.id)}
+                    onPay={() => openPaymentForFlat(selectedFlat.id)}
                   />
                 )}
               </>
@@ -3421,59 +3392,15 @@ async function saveFlat() {
         )}
 
         {activeTab === "paymentSetup" && canManage() && (
-          <>
-            <div className="pageHeader">
-              <div>
-                <h1>Payment Setup</h1>
-                <p>Manager ki UPI ID aur QR image yahan se update hogi. Resident ko Pay button par ye hi details dikhenge.</p>
-              </div>
-            </div>
-
-            <div className="settingsGrid">
-              <div className="settingsCard">
-                <h3>UPI Details</h3>
-
-                <label>Manager UPI ID</label>
-                <input placeholder="example@upi" value={paymentSettingsForm.upiId} onChange={(e) => setPaymentSettingsForm({ ...paymentSettingsForm, upiId: e.target.value })} />
-
-                <label>QR Image</label>
-                <input type="file" accept="image/*" onChange={handleQrUpload} />
-
-                <div className="settingsActions">
-                  <button onClick={savePaymentSettings}>Save Payment Settings</button>
-                  {paymentSettingsForm.qrImage && (
-                    <button className="dangerBtn" onClick={() => setPaymentSettingsForm({ ...paymentSettingsForm, qrImage: "" })}>
-                      Remove QR
-                    </button>
-                  )}
-                </div>
-
-                <p className="hintText">QR image 900KB se kam rakho. Payment verification abhi manager ke through manual rahega.</p>
-              </div>
-
-              <div className="settingsCard">
-                <h3>Resident Preview</h3>
-
-                {paymentSettingsForm.qrImage ? (
-                  <img className="qrPreview" src={paymentSettingsForm.qrImage} alt="UPI QR Preview" />
-                ) : (
-                  <div className="qrPlaceholder">QR image not uploaded</div>
-                )}
-
-                <div className="upiPreview">
-                  <span>UPI ID</span>
-                  <b>{paymentSettingsForm.upiId || "Not added"}</b>
-                </div>
-              </div>
-            </div>
-          </>
+          <PaymentSetupPanel key={selectedSocietyId} auth={auth} societyId={selectedSocietyId} isSuperAdmin={isSuperAdmin()}
+            onPublicChange={(value) => setSecureReceiver({societyId: selectedSocietyId, public: value})} />
         )}
 
         {payModalFlat && (
           <PaymentModal
             flat={payModalFlat}
             data={societyData}
-            paymentSettings={data.paymentSettings}
+            paymentSettings={activeReceiver ? (activeReceiver.active ? activeReceiver : {}) : data.paymentSettings}
             onClose={() => setPayModalFlatId("")}
             onCopyUpi={copyUpiId}
           />
@@ -3732,6 +3659,8 @@ function PaymentModal({ flat, data, paymentSettings, onClose, onCopyUpi }) {
           <div className="card success"><span>Advance</span><b>{rupee(ledger.advance)}</b></div>
         </div>
 
+        {paymentSettings?.holderName && <p className="paymentNote">Payee: <strong>{paymentSettings.holderName}</strong>{paymentSettings.bankName && ` · ${paymentSettings.bankName} · account ending ${paymentSettings.accountLast4}`}</p>}
+
         {qrImage ? (
           <img className="qrImage" src={qrImage} alt="Manager UPI QR" />
         ) : (
@@ -3739,7 +3668,7 @@ function PaymentModal({ flat, data, paymentSettings, onClose, onCopyUpi }) {
         )}
 
         <div className="upiBox">
-          <span>Manager UPI ID</span>
+          <span>{paymentSettings?.mode === "society_account" ? "Society UPI ID" : "Receiving UPI ID"}</span>
           <b>{upiId || "UPI ID not added"}</b>
           <button onClick={onCopyUpi}>Copy UPI ID</button>
         </div>
