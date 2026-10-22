@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "node scripts/apply-payment-balance-hotfix.mjs && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "migrate:saas": "node scripts/migrateToSaas.js",
