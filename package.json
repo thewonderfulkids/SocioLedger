@@ -12,7 +12,7 @@
     "sync:residents": "node scripts/createResidentUsersFromFlats.js",
     "apply:trial": "node scripts/apply15DayTrial.js",
     "create:auth-users": "node scripts/createAuthUsers.js",
-    "test": "node tests/ledger.test.cjs && node --test tests/audit.test.mjs"
+    "test": "node tests/ledger.test.cjs && node --test tests/audit.test.mjs tests/payment-save.test.cjs"
   },
   "dependencies": {
     "firebase": "^12.13.0",
