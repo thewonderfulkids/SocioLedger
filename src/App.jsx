@@ -1,5 +1,5 @@
 import { buildYearlyAuditRows, serializeCSV } from "./audit.js";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ref, onValue, set, push, update, remove, get } from "firebase/database";
 import { db } from "./firebase";
 import {
@@ -677,6 +677,10 @@ function buildLedger(flat, data, throughMonth = getCurrentMonth()) {
       return true;
     })
     .sort((a, b) => {
+      // New receipts are appended to the reconciled legacy ledger. A backdated
+      // receipt must not reorder historical packages and discard old credits.
+      const versionOrder = Number(a.allocationVersion === 2) - Number(b.allocationVersion === 2);
+      if (versionOrder) return versionOrder;
       // The malformed migration date otherwise returns NaN, leaving this
       // receipt after new payments and causing the package cap to discard cash.
       const aDate = isFlat403LegacyClose(a, flat) ? "2026-04-30" : a.date || a.paymentDate || a.paidAt || a.createdAt || 0;
@@ -684,20 +688,21 @@ function buildLedger(flat, data, throughMonth = getCurrentMonth()) {
       return new Date(aDate).getTime() - new Date(bDate).getTime();
     });
 
-  const applyAmountToEntries = (rawAmount, predicate, source = "direct") => {
-    let amount = toMoney(rawAmount);
+  const applyAmountToEntries = (rawAmount, predicate, source = "direct", usePaise = false) => {
+    const money = (value) => usePaise ? Math.round(value * 100) / 100 : value;
+    let amount = money(toMoney(rawAmount));
 
     for (const entry of entries) {
       if (amount <= 0) break;
       if (!predicate(entry)) continue;
       if (entry.due <= 0) continue;
 
-      const adjusted = Math.min(entry.due, amount);
-      entry.paid += adjusted;
-      if (source === "advance") entry.advanceAdjusted += adjusted;
-      else entry.directPaid += adjusted;
-      entry.due -= adjusted;
-      amount -= adjusted;
+      const adjusted = money(Math.min(entry.due, amount));
+      entry.paid = money(entry.paid + adjusted);
+      if (source === "advance") entry.advanceAdjusted = money(entry.advanceAdjusted + adjusted);
+      else entry.directPaid = money(entry.directPaid + adjusted);
+      entry.due = money(entry.due - adjusted);
+      amount = money(amount - adjusted);
     }
 
     return amount;
@@ -713,6 +718,16 @@ function buildLedger(flat, data, throughMonth = getCurrentMonth()) {
     const originalPaymentAmount = getEffectivePaymentAmount(payment, flat, data);
     let amount = originalPaymentAmount;
     const appliedUntilMonth = getPaymentAppliedUntilMonth(payment);
+
+    if (payment.allocationVersion === 2) {
+      // New receipts conserve every rupee: settle unpaid charges first, then
+      // retain the complete surplus. Legacy package caps remain untouched.
+      advance = applyAmountToEntries(advance, () => true, "advance", true);
+      amount = applyAmountToEntries(amount, (entry) => isMonthOnOrBefore(entry.month, appliedUntilMonth), "direct", true);
+      amount = applyAmountToEntries(amount, () => true, "advance", true);
+      advance = Math.round((advance + amount) * 100) / 100;
+      continue;
+    }
     const { coverageEndMonth, isWholeMonthPackage } = getPaymentCoverageInfo(
       payment,
       flat,
@@ -765,6 +780,17 @@ function buildLedger(flat, data, throughMonth = getCurrentMonth()) {
     totalAdjusted: entries.reduce((sum, e) => sum + e.paid, 0),
     totalPaid: flatPayments.reduce((sum, p) => sum + getEffectivePaymentAmount(p, flat, data), 0),
   };
+}
+
+function getPaymentPreview(flat, data, payment) {
+  // An acknowledged realtime copy may already exist when a failed attempt is
+  // retried. Simulate replacement of that ID, never a duplicate receipt.
+  const base = { ...data, payments: data.payments.filter((p) => p.id !== payment.id) };
+  const before = buildLedger(flat, base);
+  const after = buildLedger(flat, { ...base, payments: [...base.payments, { ...payment, allocationVersion: 2 }] });
+  const expectedNet = Math.round((before.totalDue - before.advance - getPaymentAmount(payment)) * 100);
+  const actualNet = Math.round((after.totalDue - after.advance) * 100);
+  return { before, after, balanced: expectedNet === actualNet };
 }
 
 function getMonthPaymentInfo(flat, data, monthKey) {
@@ -905,6 +931,9 @@ export default function App() {
     forMonth: getCurrentMonth(),
     note: "",
   });
+  const [paymentSaving, setPaymentSaving] = useState(false);
+  const paymentSaveLock = useRef(false);
+  const paymentAttempt = useRef(null);
 
   const [expenseForm, setExpenseForm] = useState({
     amount: "",
@@ -1237,6 +1266,13 @@ useEffect(() => {
   const selectedFlat = useMemo(() => {
     return visibleFlats.find((flat) => flat.id === selectedFlatId) || visibleFlats[0] || null;
   }, [selectedFlatId, visibleFlats]);
+
+  const paymentPreviewFlat = data.flats.find((flat) => flat.id === paymentForm.flatId);
+  const paymentPreview = paymentPreviewFlat && Number(paymentForm.amount) > 0 && isValidPaymentDate(paymentForm.date)
+    ? getPaymentPreview(paymentPreviewFlat, societyData, {
+        ...paymentForm, id: "draft-payment", amount: Number(paymentForm.amount),
+      })
+    : null;
 
   const payModalFlat = useMemo(() => {
     return societyData.flats.find((flat) => flat.id === payModalFlatId) || null;
@@ -2037,6 +2073,7 @@ async function saveFlat() {
   }
 
   async function addPayment() {
+    if (paymentSaveLock.current) return;
     if (!canManage()) return alert("You do not have permission.");
 
     if (!paymentForm.flatId || !paymentForm.amount) {
@@ -2044,8 +2081,8 @@ async function saveFlat() {
       return;
     }
 
-    if (!Number.isFinite(Number(paymentForm.amount)) || Number(paymentForm.amount) <= 0) {
-      return alert("Enter a positive payment amount.");
+    if (!Number.isFinite(Number(paymentForm.amount)) || Number(paymentForm.amount) <= 0 || !Number.isSafeInteger(Math.round(Number(paymentForm.amount) * 100)) || Math.round(Number(paymentForm.amount) * 100) / 100 !== Number(paymentForm.amount)) {
+      return alert("Enter a positive payment amount with up to two decimal places.");
     }
     if (!isValidPaymentDate(paymentForm.date) || !/^\d{4}-(0[1-9]|1[0-2])$/.test(paymentForm.forMonth)) {
       return alert("Enter a valid payment date (YYYY-MM-DD) and month.");
@@ -2054,15 +2091,16 @@ async function saveFlat() {
       return alert("Selected flat is no longer available. Refresh and select again.");
     }
 
-    const id = createFirebaseId(societyPath(selectedSocietyId, "payments"));
-
     const paymentFlat = data.flats.find((flat) => flat.id === paymentForm.flatId);
-
-    const paymentPayload = {
+    const fingerprint = JSON.stringify([selectedSocietyId, paymentForm]);
+    const existingAttempt = paymentAttempt.current?.fingerprint === fingerprint ? paymentAttempt.current : null;
+    const id = existingAttempt?.payload.id || createFirebaseId(societyPath(selectedSocietyId, "payments"));
+    const paymentPayload = existingAttempt?.payload || {
       id,
+      allocationVersion: 2,
       flatId: paymentForm.flatId,
-      flatNo: paymentFlat?.flatNo || "",
-      residentUid: paymentFlat?.residentUid || (paymentFlat?.phone ? `resident_${normalizePhone(paymentFlat.phone)}` : ""),
+      flatNo: paymentFlat.flatNo || "",
+      residentUid: paymentFlat.residentUid || (paymentFlat.phone ? `resident_${normalizePhone(paymentFlat.phone)}` : ""),
       amount: Number(paymentForm.amount),
       mode: paymentForm.mode,
       date: paymentForm.date,
@@ -2071,27 +2109,34 @@ async function saveFlat() {
       createdBy: user?.name || "",
       createdAt: Date.now(),
     };
+    const preview = getPaymentPreview(paymentFlat, data, paymentPayload);
+    if (!preview.balanced) {
+      return alert("Payment balance check failed. Nothing was saved. Please review the ledger.");
+    }
 
-    await set(ref(db, societyPath(selectedSocietyId, `payments/${id}`)), paymentPayload);
-
-    // Do not wait for the realtime listener before recalculating balances.
-    // The listener will shortly replace this optimistic copy by the same Firebase record.
-    setData((prev) => ({
-      ...prev,
-      payments: [
-        ...prev.payments.filter((payment) => payment.id !== id),
-        paymentPayload,
-      ],
-    }));
-
-    setPaymentForm({
-      flatId: "",
-      amount: "",
-      mode: "Cash",
-      date: new Date().toISOString().slice(0, 10),
-      forMonth: getCurrentMonth(),
-      note: "",
-    });
+    paymentSaveLock.current = true;
+    paymentAttempt.current = { fingerprint, payload: paymentPayload };
+    setPaymentSaving(true);
+    try {
+      await set(ref(db, societyPath(selectedSocietyId, `payments/${id}`)), paymentPayload);
+      // Deduplicate the acknowledged receipt if the realtime listener arrived first.
+      setData((prev) => ({
+        ...prev,
+        payments: [...prev.payments.filter((payment) => payment.id !== id), paymentPayload],
+      }));
+      paymentAttempt.current = null;
+      setPaymentForm({
+        flatId: "", amount: "", mode: "Cash",
+        date: new Date().toISOString().slice(0, 10),
+        forMonth: getCurrentMonth(), note: "",
+      });
+    } catch (error) {
+      console.error("Payment save failed", error.code || "unknown");
+      alert("Payment could not be confirmed. Review the ledger and retry; the same receipt ID will be reused.");
+    } finally {
+      paymentSaveLock.current = false;
+      setPaymentSaving(false);
+    }
   }
 
   async function deletePayment(payment) {
@@ -2491,6 +2536,7 @@ async function saveFlat() {
           {allowedSocieties.length > 0 && (
             <select
               className="societySelect"
+              disabled={paymentSaving}
               value={selectedSocietyId}
               onChange={(e) => {
                 setSelectedSocietyId(e.target.value);
@@ -3034,17 +3080,17 @@ async function saveFlat() {
               </div>
             </div>
 
-            <div className="formGrid">
-              <select value={paymentForm.flatId} onChange={(e) => setPaymentForm({ ...paymentForm, flatId: e.target.value })}>
+            <fieldset className="formGrid paymentEntryForm" disabled={paymentSaving}>
+              <select aria-label="Payment flat" value={paymentForm.flatId} onChange={(e) => setPaymentForm({ ...paymentForm, flatId: e.target.value })}>
                 <option value="">Select Flat</option>
                 {activeFlats.map((flat) => (
                   <option key={flat.id} value={flat.id}>{flat.flatNo} - {flat.ownerName}</option>
                 ))}
               </select>
 
-              <input type="number" placeholder="Amount" value={paymentForm.amount} onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })} />
+              <input type="number" min="0.01" step="0.01" inputMode="decimal" aria-label="Payment amount" placeholder="Amount" value={paymentForm.amount} onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })} />
 
-              <select value={paymentForm.mode} onChange={(e) => setPaymentForm({ ...paymentForm, mode: e.target.value })}>
+              <select aria-label="Payment mode" value={paymentForm.mode} onChange={(e) => setPaymentForm({ ...paymentForm, mode: e.target.value })}>
                 <option>Cash</option>
                 <option>UPI</option>
                 <option>Bank Transfer</option>
@@ -3052,10 +3098,23 @@ async function saveFlat() {
               </select>
 
               <input type="text" inputMode="numeric" placeholder="YYYY-MM-DD" value={paymentForm.date} onChange={(e) => setPaymentForm({ ...paymentForm, date: e.target.value })} aria-label="Payment date (YYYY-MM-DD)" />
-              <input type="month" value={paymentForm.forMonth} onChange={(e) => setPaymentForm({ ...paymentForm, forMonth: e.target.value })} />
+              <input type="month" aria-label="Payment month" value={paymentForm.forMonth} onChange={(e) => setPaymentForm({ ...paymentForm, forMonth: e.target.value })} />
               <input placeholder="Note" value={paymentForm.note} onChange={(e) => setPaymentForm({ ...paymentForm, note: e.target.value })} />
-              <button onClick={addPayment}>Save Payment</button>
-            </div>
+              <button onClick={addPayment} disabled={paymentSaving || !paymentPreview?.balanced}>{paymentSaving ? "Saving payment…" : "Save Payment"}</button>
+            </fieldset>
+
+            {paymentPreview && (
+              <section className="paymentPreview" aria-label="Payment allocation preview" aria-live="polite">
+                <div className="sectionTitleRow"><div><h2>After this payment</h2><p>Flat {paymentPreviewFlat.flatNo} · Clears outstanding charges first; surplus stays as advance.</p></div></div>
+                <div className="paymentPreviewAmounts">
+                  <div><span>Current due</span><strong>{rupee(paymentPreview.before.totalDue)}</strong></div>
+                  <div><span>Payment</span><strong>{rupee(Number(paymentForm.amount))}</strong></div>
+                  <div><span>Due after payment</span><strong>{rupee(paymentPreview.after.totalDue)}</strong></div>
+                  <div><span>Advance after payment</span><strong>{rupee(paymentPreview.after.advance)}</strong></div>
+                </div>
+                {!paymentPreview.balanced && <p role="alert">Balance check failed. Review this flat before saving.</p>}
+              </section>
+            )}
 
             <div className="tableWrap">
               <table>
@@ -3323,7 +3382,7 @@ async function saveFlat() {
             </div>
 
             {canManage() && (
-              <div className="formGrid">
+              <div className="formGrid auditToolbar">
                 <label>
                   Audit year
                   <input type="number" min="2000" max={getCurrentMonth().slice(0, 4)} value={auditYear} onChange={(e) => setAuditYear(e.target.value)} aria-label="Audit year" />

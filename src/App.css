@@ -5347,3 +5347,88 @@ body:has(.neoLoginPage) #root {
     align-self: flex-start;
   }
 }
+
+/* Theme-owned surfaces: readable even when the operating system prefers dark. */
+.app {
+  color-scheme: light;
+  --surface: #ffffff;
+  --surface-soft: #f8fafc;
+  --heading-color: #0f172a;
+  --body-color: #334155;
+  --control-border: #cbd5e1;
+}
+.app.dark {
+  color-scheme: dark;
+  --surface: #111827;
+  --surface-soft: #172235;
+  --heading-color: #f1f5f9;
+  --body-color: #cbd5e1;
+  --control-border: #475569;
+}
+.app .main :is(.ledgerHeader, .sectionTitleRow, .settingsCard, .emptyState, .profileCard) :is(h2, h3) {
+  color: var(--heading-color) !important;
+  opacity: 1;
+  text-shadow: none;
+}
+.app .main :is(.dashboardToolbar, .expenseControlPanel, .expenseInsightPanel, .paymentPreview) {
+  color: var(--body-color);
+  background: var(--surface);
+  border-color: var(--control-border);
+}
+.app .main :is(.sectionTitleRow p, .emptyMini, .dashboardToolbar span, .monthFilterBox label) {
+  color: var(--muted);
+}
+.app .main .emptyMini {
+  background: var(--surface-soft);
+  border-color: var(--control-border);
+}
+.app.dark .main .expenseCategoryCard {
+  background: var(--surface-soft) !important;
+  color: var(--text) !important;
+  border-color: var(--control-border) !important;
+}
+.app.dark .main .expenseCategoryCard b { color: #5eead4; }
+.app.dark .main .expenseCategoryCard span { color: var(--muted); }
+.app.dark .main :is(.ghostBtn, .filterPill:not(.active)) {
+  background: var(--surface-soft) !important;
+  color: #99f6e4 !important;
+  border-color: var(--control-border) !important;
+}
+.app select option { background: var(--surface); color: var(--heading-color); }
+.app .sidebar { color-scheme: dark; }
+.app .societySelect option { color: #f1f5f9; background: #172235; }
+.app :is(button, a, input, select, textarea):focus-visible {
+  outline: 3px solid #0d9488;
+  outline-offset: 3px;
+}
+.app button:disabled { cursor: not-allowed; opacity: .6; transform: none; }
+.app .auditToolbar {
+  grid-template-columns: minmax(110px, 150px) max-content minmax(200px, 1fr);
+  align-items: center;
+  gap: 20px;
+}
+.app .auditToolbar label { display: grid; gap: 6px; font-weight: 600; }
+.app .auditToolbar button { min-height: 46px; align-self: end; }
+.app .auditToolbar p { color: var(--muted); font-size: 13px; line-height: 1.6; }
+.app fieldset.paymentEntryForm { margin-inline: 0; min-width: 0; }
+.paymentPreview {
+  border: 1px solid var(--control-border);
+  border-left: 4px solid #0d9488;
+  border-radius: 18px;
+  padding: 20px;
+  margin: 0 0 20px;
+}
+.app .paymentPreview .sectionTitleRow h2 { margin: 0 0 6px; font-size: 20px; }
+.paymentPreviewAmounts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.paymentPreviewAmounts div { background: var(--surface-soft); border-radius: 12px; padding: 14px; }
+.paymentPreviewAmounts span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+.paymentPreviewAmounts strong { color: var(--heading-color); font-size: 22px; font-variant-numeric: tabular-nums; }
+@media (max-width: 760px) {
+  .app .auditToolbar { grid-template-columns: 1fr; gap: 12px; }
+  .app .auditToolbar button { width: 100%; }
+  .paymentPreviewAmounts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.app:not(.dark) .card.warning b { color: #b45309; }
+.app:not(.dark) .card.success b { color: #15803d; }
+.app.dark .card.warning b { color: #fbbf24; }
+.app.dark .card.success b { color: #4ade80; }

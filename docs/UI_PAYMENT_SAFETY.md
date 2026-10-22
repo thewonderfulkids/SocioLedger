@@ -1,0 +1,9 @@
+# Theme and prospective payment safety
+
+The Vite starter stylesheet automatically set heading colors from the operating system's preferred theme, independently of the app theme. With OS dark and app light, Flat titles and expense headings became near-white on white panels. Global CSS now supplies only resets; app surfaces and native controls own their light/dark palette. Ledger/section headings, dashboard expense surfaces, metric colors, keyboard focus and the audit toolbar have explicit responsive theme styling.
+
+New receipts created by this version carry allocationVersion: 2. Historical receipts keep their existing allocation policy and special compatibility corrections, including Flat 201 and Flat 403. New receipts allocate after the reconciled legacy ledger, clear unpaid charges and retain the full surplus rather than expiring excess under a legacy package cap. New allocation arithmetic rounds to paise to avoid phantom fractional dues. Existing Firebase records are not migrated or rewritten.
+
+Payment Entry previews the resulting due/advance and checks that net due minus advance falls by exactly the new receipt amount before any write. Save is locked synchronously against double-clicks. A failed attempt retains its receipt ID for retry; the realtime copy is deduplicated both in preview and after acknowledgement. Failure does not silently clear the form. Controls and society switching are disabled while a save is pending.
+
+Validation: historical regression fixtures; 96 prospective receipt combinations; 384 read-only prospective simulations against actual records for all 16 flats; all existing ledgers unchanged; advance consumption into future months; paise settlement; duplicate-click, failed-save retry, realtime acknowledgement and blocked-invalid-save mocks; lint/build/clean diff. No test payments were written to Firebase.

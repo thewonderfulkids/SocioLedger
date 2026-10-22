@@ -68,3 +68,37 @@ assert.equal(current.isValidPaymentDate('2026-31-31'),false);
 assert.equal(current.isValidPaymentDate('2026-02-30'),false);
 assert.equal(current.isValidPaymentDate('2028-02-29'),true);
 console.log('PASS: editable mobile date accepts real ISO dates and rejects malformed new entries');
+// Prospective payment policy: new receipts never reapply historical packages.
+let scenarios = 0;
+for (const no of Object.keys(fixtures)) {
+  const f = {id:no,flatNo:no,openingDue:0};
+  const d = {rateHistory,payments:paymentsFor(no)};
+  const before = current.buildLedger(f,d);
+  for (const amount of [0.01,200,799.99,800,1100,1600,3200,12345.67]) {
+    for (const [date,forMonth] of [['2026-01-01','2026-01'],['2026-10-22','2026-10'],['2027-06-15','2027-06']]) {
+      const receipt={id:`new-${scenarios++}`,flatId:no,amount,date,forMonth,allocationVersion:2};
+      const preview=current.getPaymentPreview(f,d,receipt);
+      assert.equal(preview.balanced,true,`${no} ${amount} ${date}`);
+      const after=preview.after;
+      assert.equal(Math.round((before.totalDue-before.advance-amount)*100),Math.round((after.totalDue-after.advance)*100));
+      assert.ok(Math.abs((before.totalPaid-before.totalAdjusted-before.advance)-(after.totalPaid-after.totalAdjusted-after.advance)) < 0.005,'historical unallocated difference must not grow');
+      assert.ok(after.totalDue<0.005 || after.advance<0.005,'do not leave payable due beside available advance');
+      // Removing the proposed receipt must restore the exact pre-payment ledger.
+      assert.equal(JSON.stringify(current.buildLedger(f,d)),JSON.stringify(before));
+    }
+  }
+}
+const futureFlat={id:'new',flatNo:'new'};
+const futureData={rateHistory:[{fromMonth:'2026-04',amount:800}],payments:[{id:'advance',flatId:'new',date:'2026-04-01',forMonth:'2026-04',amount:10000,allocationVersion:2}]};
+assert.equal(current.buildLedger(futureFlat,futureData,'2026-10').advance,4400);
+assert.equal(current.buildLedger(futureFlat,futureData,'2026-11').advance,3600);
+assert.equal(current.buildLedger(futureFlat,futureData,'2027-05').totalDue,1200);
+console.log(`PASS: ${scenarios} future receipt scenarios; paise, backdating, future months, packages, advance consumption and removal`);
+const acknowledged = futureData.payments[0];
+assert.equal(current.getPaymentPreview(futureFlat,futureData,acknowledged).balanced,true);
+assert.equal(current.getPaymentPreview(futureFlat,futureData,acknowledged).after.totalPaid,10000);
+console.log('PASS: realtime acknowledgement plus retry does not double-count a receipt');
+const centsData={rateHistory:[{fromMonth:'2026-10',amount:800}],payments:[799.99,0.01].map((amount,i)=>({id:`cents-${i}`,flatId:'new',amount,date:`2026-10-0${i+1}`,forMonth:'2026-10',allocationVersion:2}))};
+const centsLedger=current.buildLedger(futureFlat,centsData);
+assert.equal(centsLedger.totalDue,0);assert.equal(centsLedger.advance,0);assert.equal(centsLedger.entries[0].due,0);
+console.log('PASS: paise rounding leaves no phantom dues after 799.99 + 0.01');
