@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { buildYearlyAuditRows, serializeCSV } from "./audit.js";
+import { useEffect, useMemo, useState } from "react";
 import { ref, onValue, set, push, update, remove, get } from "firebase/database";
 import { db } from "./firebase";
 import {
@@ -56,46 +57,6 @@ const initialData = {
   subscription: null,
 };
 
-const seedUsers = {
-  super_admin: {
-    id: "super_admin",
-    phone: "9999999999",
-    role: roles.SUPER_ADMIN,
-    name: "Super Admin",
-  },
-  manager: {
-    id: "manager",
-    phone: "8888888888",
-    role: roles.MANAGER,
-    name: "Manager",
-    password: "123456",
-    societyIds: ["default_society"],
-  },
-};
-
-const seedRateHistory = {
-  rate_2025_12: {
-    id: "rate_2025_12",
-    fromMonth: "2025-12",
-    amount: 1000,
-  },
-  rate_2026_04: {
-    id: "rate_2026_04",
-    fromMonth: "2026-04",
-    amount: 800,
-  },
-};
-
-const seedSocieties = {
-  default_society: {
-    id: "default_society",
-    name: "Default Society",
-    address: "",
-    active: true,
-    createdAt: Date.now(),
-  },
-};
-
 const seedPaymentSettings = {
   upiId: "",
   qrImage: "",
@@ -104,10 +65,6 @@ const seedPaymentSettings = {
 
 function normalizePhone(phone = "") {
   return String(phone).replace(/\D/g, "").slice(-10);
-}
-
-function phoneToEmail(phone = "") {
-  return `${normalizePhone(phone)}@socioledger.local`;
 }
 
 /**
@@ -499,6 +456,12 @@ function getEffectivePaymentAmount(payment, flat, data) {
   return amount;
 }
 
+function isValidPaymentDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value))) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
 function getPaymentMonth(payment) {
   const directMonth =
     payment?.forMonth ||
@@ -608,19 +571,6 @@ function isMonthOnOrAfter(month, startMonth) {
   if (month === "OPENING") return false;
   if (!month || !month.includes("-")) return false;
   return month >= startMonth;
-}
-
-function getNextMonthKey(monthKey) {
-  if (!monthKey || !monthKey.includes("-")) return "";
-
-  const [yearText, monthText] = monthKey.split("-");
-  const year = Number(yearText);
-  const month = Number(monthText);
-
-  if (!Number.isFinite(year) || !Number.isFinite(month)) return "";
-
-  const next = new Date(year, month, 1);
-  return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function isMonthOnOrBefore(month, limitMonth) {
@@ -863,9 +813,7 @@ function getMonthPaymentInfo(flat, data, monthKey) {
 }
 
 function downloadCSV(filename, rows) {
-  const csv = rows
-    .map((row) => row.map((cell) => `"${String(cell ?? "").replaceAll('"', '""')}"`).join(","))
-    .join("\n");
+  const csv = serializeCSV(rows);
 
   const blob = new Blob([csv], {
     type: "text/csv;charset=utf-8;",
@@ -907,7 +855,7 @@ function NeoLoginIcon({ type, className = "" }) {
 
 export default function App() {
   const [data, setData] = useState(initialData);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [authReady, setAuthReady] = useState(false);
 
   const [user, setUser] = useState(null);
@@ -926,6 +874,7 @@ export default function App() {
   const [selectedFlatId, setSelectedFlatId] = useState("");
   const [selectedSocietyId, setSelectedSocietyId] = useState("default_society");
   const [reportMonth, setReportMonth] = useState(getCurrentMonth());
+  const [auditYear, setAuditYear] = useState(getCurrentMonth().slice(0, 4));
   const [statusMonth, setStatusMonth] = useState(getCurrentMonth());
   const [dashboardMonth, setDashboardMonth] = useState(getCurrentMonth());
   const [expenseMonth, setExpenseMonth] = useState(getCurrentMonth());
@@ -996,6 +945,8 @@ useEffect(() => {
   if (!authReady) return;
 
   if (!authUser) {
+    // Reset the external Firebase session when authentication ends.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setUser(null);
     setData(initialData);
     setSelectedSocietyId("default_society");
@@ -1152,6 +1103,8 @@ useEffect(() => {
 
   if (!canAccessSociety(user, selectedSocietyId)) {
     alert("You do not have access to this society.");
+    // Reject a society selection no longer authorized by the user profile.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedSocietyId("");
     return;
   }
@@ -1235,6 +1188,8 @@ useEffect(() => {
 }, [authUser, user, selectedSocietyId]);
 
   useEffect(() => {
+    // Synchronize this editable draft with realtime Firebase settings.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPaymentSettingsForm({
       upiId: data.paymentSettings?.upiId || "",
       qrImage: data.paymentSettings?.qrImage || "",
@@ -1270,13 +1225,7 @@ useEffect(() => {
       ? data.societies.filter((s) => userSocietyIds.includes(s.id))
       : data.societies.filter((s) => s.id === selectedSocietyId);
 
-  const societyData = {
-    ...data,
-    flats: data.flats,
-    payments: data.payments,
-    expenses: data.expenses,
-    rateHistory: data.rateHistory,
-  };
+  const societyData = data;
 
   const activeFlats = societyData.flats.filter((flat) => flat.active !== false);
 
@@ -2095,11 +2044,21 @@ async function saveFlat() {
       return;
     }
 
+    if (!Number.isFinite(Number(paymentForm.amount)) || Number(paymentForm.amount) <= 0) {
+      return alert("Enter a positive payment amount.");
+    }
+    if (!isValidPaymentDate(paymentForm.date) || !/^\d{4}-(0[1-9]|1[0-2])$/.test(paymentForm.forMonth)) {
+      return alert("Enter a valid payment date (YYYY-MM-DD) and month.");
+    }
+    if (!data.flats.some((flat) => flat.id === paymentForm.flatId)) {
+      return alert("Selected flat is no longer available. Refresh and select again.");
+    }
+
     const id = createFirebaseId(societyPath(selectedSocietyId, "payments"));
 
     const paymentFlat = data.flats.find((flat) => flat.id === paymentForm.flatId);
 
-    await set(ref(db, societyPath(selectedSocietyId, `payments/${id}`)), {
+    const paymentPayload = {
       id,
       flatId: paymentForm.flatId,
       flatNo: paymentFlat?.flatNo || "",
@@ -2111,7 +2070,19 @@ async function saveFlat() {
       note: paymentForm.note.trim(),
       createdBy: user?.name || "",
       createdAt: Date.now(),
-    });
+    };
+
+    await set(ref(db, societyPath(selectedSocietyId, `payments/${id}`)), paymentPayload);
+
+    // Do not wait for the realtime listener before recalculating balances.
+    // The listener will shortly replace this optimistic copy by the same Firebase record.
+    setData((prev) => ({
+      ...prev,
+      payments: [
+        ...prev.payments.filter((payment) => payment.id !== id),
+        paymentPayload,
+      ],
+    }));
 
     setPaymentForm({
       flatId: "",
@@ -2139,6 +2110,8 @@ async function saveFlat() {
     );
     if (!ok) return;
 
+    // Event handler timestamp; this function is invoked only after a click.
+    // eslint-disable-next-line react-hooks/purity
     const deletedAt = Date.now();
     const deletedBy = user?.name || user?.phone || authUser?.email || "";
     const logId = createFirebaseId(societyPath(selectedSocietyId, "paymentDeletionLogs"));
@@ -2270,6 +2243,16 @@ async function saveFlat() {
     );
 
     return `https://wa.me/?text=${message}`;
+  }
+
+  function exportYearlyAuditCSV() {
+    if (!canManage() || !canAccessSociety(user, selectedSocietyId)) return;
+    const rows = buildYearlyAuditRows({
+      year: auditYear, asOfMonth: getCurrentMonth(), flats: visibleFlats,
+      data: societyData, buildLedger, getPaymentMonth,
+      getEffectivePaymentAmount, isPaymentForFlat,
+    });
+    downloadCSV(`SocioLedger_Yearly_Audit_${auditYear}.csv`, rows);
   }
 
   function exportReportCSV() {
@@ -3068,7 +3051,7 @@ async function saveFlat() {
                 <option>Cheque</option>
               </select>
 
-              <input type="date" value={paymentForm.date} onChange={(e) => setPaymentForm({ ...paymentForm, date: e.target.value })} />
+              <input type="text" inputMode="numeric" placeholder="YYYY-MM-DD" value={paymentForm.date} onChange={(e) => setPaymentForm({ ...paymentForm, date: e.target.value })} aria-label="Payment date (YYYY-MM-DD)" />
               <input type="month" value={paymentForm.forMonth} onChange={(e) => setPaymentForm({ ...paymentForm, forMonth: e.target.value })} />
               <input placeholder="Note" value={paymentForm.note} onChange={(e) => setPaymentForm({ ...paymentForm, note: e.target.value })} />
               <button onClick={addPayment}>Save Payment</button>
@@ -3338,6 +3321,17 @@ async function saveFlat() {
                 <p>Flat-wise dues, payments, adjustments and advance.</p>
               </div>
             </div>
+
+            {canManage() && (
+              <div className="formGrid">
+                <label>
+                  Audit year
+                  <input type="number" min="2000" max={getCurrentMonth().slice(0, 4)} value={auditYear} onChange={(e) => setAuditYear(e.target.value)} aria-label="Audit year" />
+                </label>
+                <button onClick={exportYearlyAuditCSV} disabled={!/^\d{4}$/.test(auditYear) || Number(auditYear) > Number(getCurrentMonth().slice(0, 4))}>Export Yearly Audit CSV</button>
+                <p>Read-only current allocation snapshot by year. Later payments may settle earlier months.</p>
+              </div>
+            )}
 
             {visibleFlats.length > 0 ? (
               <>
