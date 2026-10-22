@@ -571,7 +571,24 @@ function addMonthsToMonthKey(monthKey, offset) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
+function isFlat403LegacyClose(payment, flat) {
+  return (
+    String(flat?.flatNo || "") === "403" &&
+    String(payment?.id || "") === "-OrwoOd3xJIds_HrJ7qu" &&
+    getPaymentAmount(payment) === 4800 &&
+    payment?.date === "2026-31-31" &&
+    !payment?.forMonth &&
+    normalizeText(payment?.note) === "carried forward from previous months"
+  );
+}
+
 function getPaymentCoverageInfo(payment, flat, data, effectiveAmount, appliedUntilMonth) {
+  // This exact migration receipt closes Dec-Apr (4000 + 800), not Apr-Sep.
+  // Keep all other historical receipts and Rajat's correction unchanged.
+  if (isFlat403LegacyClose(payment, flat)) {
+    return { coverageEndMonth: "2026-04", isWholeMonthPackage: true };
+  }
+
   const rate = getRateForMonth(data.rateHistory, appliedUntilMonth) || getRateForMonth(data.rateHistory, getCurrentMonth()) || 0;
   const amount = toMoney(effectiveAmount);
 
@@ -710,8 +727,10 @@ function buildLedger(flat, data, throughMonth = getCurrentMonth()) {
       return true;
     })
     .sort((a, b) => {
-      const aDate = a.date || a.paymentDate || a.paidAt || a.createdAt || 0;
-      const bDate = b.date || b.paymentDate || b.paidAt || b.createdAt || 0;
+      // The malformed migration date otherwise returns NaN, leaving this
+      // receipt after new payments and causing the package cap to discard cash.
+      const aDate = isFlat403LegacyClose(a, flat) ? "2026-04-30" : a.date || a.paymentDate || a.paidAt || a.createdAt || 0;
+      const bDate = isFlat403LegacyClose(b, flat) ? "2026-04-30" : b.date || b.paymentDate || b.paidAt || b.createdAt || 0;
       return new Date(aDate).getTime() - new Date(bDate).getTime();
     });
 
