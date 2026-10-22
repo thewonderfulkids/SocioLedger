@@ -1,3 +1,5 @@
+import LiftCardsPanel from "./LiftCardsPanel.jsx";
+import { incomeTotal } from "./lift-cards.js";
 import PaymentSetupPanel from "./PaymentSetupPanel.jsx";
 import { paymentSetupRequest } from "./payment-setup-client.js";
 import { buildYearlyAuditRows, serializeCSV } from "./audit.js";
@@ -51,6 +53,7 @@ const initialData = {
   rateHistory: [],
   payments: [],
   expenses: [],
+  otherIncome: [],
   paymentSettings: {
     upiId: "",
     qrImage: "",
@@ -944,6 +947,8 @@ export default function App() {
     note: "",
   });
 
+  const [incomeAccess, setIncomeAccess] = useState(null);
+  const incomeLoadError = incomeAccess?.societyId === selectedSocietyId ? incomeAccess.error : "Loading other income…";
   const [secureReceiver, setSecureReceiver] = useState(null);
   const [societyForm, setSocietyForm] = useState({
     id: "",
@@ -1184,6 +1189,11 @@ useEffect(() => {
     }));
   });
 
+  const unsubIncome = onValue(ref(db, `${basePath}/otherIncome`), snapshot => {
+    setData(prev => ({...prev, otherIncome:normalizeList(snapshot.val() || []).sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0))}));
+    setIncomeAccess({societyId:selectedSocietyId,error:""});
+  }, () => { setIncomeAccess({societyId:selectedSocietyId,error:"Other income could not be loaded. Check society permissions."}); setData(prev=>({...prev,otherIncome:[]})); });
+
   const unsubPaymentSettings = onValue(
     ref(db, `${basePath}/paymentSettings`),
     (snapshot) => {
@@ -1209,6 +1219,7 @@ useEffect(() => {
     unsubRates();
     unsubPayments();
     unsubExpenses();
+    unsubIncome();
     unsubPaymentSettings();
     unsubSubscription();
   };
@@ -1315,7 +1326,8 @@ useEffect(() => {
       totalCharge,
       collection,
       totalExpense,
-      netBalance: collection - totalExpense,
+      otherIncome: incomeTotal(societyData.otherIncome),
+      netBalance: collection + incomeTotal(societyData.otherIncome) - totalExpense,
     };
   }, [societyData, activeFlats.length]);
 
@@ -1389,6 +1401,7 @@ useEffect(() => {
     const monthPayments = societyData.payments.filter((p) => getPaymentMonth(p) === reportMonth || String(p.date || p.paymentDate || "").startsWith(reportMonth));
     const monthExpenses = societyData.expenses.filter((e) => String(e.date || "").startsWith(reportMonth));
 
+    const monthIncome = societyData.otherIncome.filter(item=>String(item.date||"").startsWith(reportMonth));
     const collected = monthPayments.reduce((sum, p) => sum + getPaymentAmount(p), 0);
     const expenses = monthExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
@@ -1410,11 +1423,13 @@ useEffect(() => {
       expenses: monthExpenses,
       collected,
       expenseTotal: expenses,
-      net: collected - expenses,
+      otherIncome: monthIncome,
+      incomeTotal: incomeTotal(monthIncome),
+      net: collected + incomeTotal(monthIncome) - expenses,
       categoryTotals,
       modeTotals,
     };
-  }, [societyData.payments, societyData.expenses, reportMonth]);
+  }, [societyData.payments, societyData.expenses, societyData.otherIncome, reportMonth]);
 
   const monthlyStatus = useMemo(() => {
     const rows = activeFlats.map((flat) => {
@@ -2253,8 +2268,9 @@ async function saveFlat() {
       `SocioLedger Monthly Summary\n\n` +
         `Month: ${formatMonth(monthlyReport.month)}\n` +
         `Collection: ${rupee(monthlyReport.collected)}\n` +
+        `Other Income: ${incomeLoadError ? "Unavailable" : rupee(monthlyReport.incomeTotal)}\n` +
         `Expense: ${rupee(monthlyReport.expenseTotal)}\n` +
-        `Net Balance: ${rupee(monthlyReport.net)}\n\n` +
+        `Net Balance: ${incomeLoadError ? "Unavailable" : rupee(monthlyReport.net)}\n\n` +
         `Generated from SocioLedger.`
     );
 
@@ -2272,12 +2288,14 @@ async function saveFlat() {
   }
 
   function exportReportCSV() {
+    if (incomeLoadError) return alert(incomeLoadError);
     const rows = [
       ["SocioLedger Monthly Report"],
       ["Month", formatMonth(monthlyReport.month)],
       [],
       ["Summary"],
       ["Collection", monthlyReport.collected],
+      ["Other Income", monthlyReport.incomeTotal],
       ["Expense", monthlyReport.expenseTotal],
       ["Net Balance", monthlyReport.net],
       [],
@@ -2287,6 +2305,10 @@ async function saveFlat() {
         const flat = societyData.flats.find((f) => f.id === p.flatId);
         return [p.date, flat?.flatNo || "-", p.amount, p.mode, p.note || "-"];
       }),
+      [],
+      ["Other Income"],
+      ["Date", "Flat", "Category", "Cards", "Unit Rate", "Amount", "Reason", "Mode", "Note", "Created By"],
+      ...monthlyReport.otherIncome.map(r=>[r.date,r.flatNo,r.category,r.quantity,r.unitRate,r.amount,r.reason,r.mode,r.note,r.createdBy]),
       [],
       ["Expenses"],
       ["Date", "Category", "Amount", "Note", "Created By"],
@@ -2548,6 +2570,8 @@ async function saveFlat() {
           <button className={activeTab === "status" ? "activeNav" : ""} onClick={() => openTab("status")}>
             Payment Status
           </button>
+
+          {canManage() && <button className={activeTab === "liftCards" ? "activeNav" : ""} onClick={()=>openTab("liftCards")}>Lift Cards / Income</button>}
 
           <button className={activeTab === "expenses" ? "activeNav" : ""} onClick={() => openTab("expenses")}>
             Expenses
@@ -2875,8 +2899,9 @@ async function saveFlat() {
                 <span>{formatMonth(dashboardMonth)} Expense</span>
                 <b>{rupee(dashboardMonthlyExpense.total)}</b>
               </div>
+              <div className="card success"><span>Other Income</span><b>{incomeLoadError ? "Unavailable" : rupee(dashboard.otherIncome)}</b></div>
               <div className={dashboard.netBalance >= 0 ? "card success" : "card danger"}>
-                <span>Net Balance</span><b>{rupee(dashboard.netBalance)}</b>
+                <span>Net Balance</span><b>{incomeLoadError ? "Unavailable" : rupee(dashboard.netBalance)}</b>
               </div>
             </div>
 
@@ -3176,6 +3201,8 @@ async function saveFlat() {
           </>
         )}
 
+        {activeTab === "liftCards" && canManage() && <LiftCardsPanel key={selectedSocietyId} db={db} societyId={selectedSocietyId} flats={societyData.flats} incomes={incomeLoadError ? [] : societyData.otherIncome} user={user} uid={authUser?.uid} loadError={incomeLoadError} />}
+
         {activeTab === "expenses" && (
           <>
             <div className="pageHeader">
@@ -3246,6 +3273,7 @@ async function saveFlat() {
                   <option>Electricity</option>
                   <option>Water</option>
                   <option>Lift</option>
+                  <option>Lift Card Purchase</option>
                   <option>Cleaning</option>
                   <option>Security</option>
                   <option>Repair</option>
@@ -3337,8 +3365,9 @@ async function saveFlat() {
 
             <div className="cards">
               <div className="card success"><span>Month Collection</span><b>{rupee(monthlyReport.collected)}</b></div>
+              <div className="card success"><span>Other Income</span><b>{incomeLoadError ? "Unavailable" : rupee(monthlyReport.incomeTotal)}</b></div>
               <div className="card danger"><span>Month Expense</span><b>{rupee(monthlyReport.expenseTotal)}</b></div>
-              <div className={monthlyReport.net >= 0 ? "card success" : "card danger"}><span>Month Net Balance</span><b>{rupee(monthlyReport.net)}</b></div>
+              <div className={monthlyReport.net >= 0 ? "card success" : "card danger"}><span>Month Net Balance</span><b>{incomeLoadError ? "Unavailable" : rupee(monthlyReport.net)}</b></div>
             </div>
           </>
         )}
