@@ -5,13 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/apply-payment-balance-hotfix.mjs && vite build",
+    "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "migrate:saas": "node scripts/migrateToSaas.js",
     "sync:residents": "node scripts/createResidentUsersFromFlats.js",
     "apply:trial": "node scripts/apply15DayTrial.js",
-    "create:auth-users": "node scripts/createAuthUsers.js"
+    "create:auth-users": "node scripts/createAuthUsers.js",
+    "test": "node tests/ledger.test.cjs && node --test tests/audit.test.mjs"
   },
   "dependencies": {
     "firebase": "^12.13.0",

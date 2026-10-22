@@ -7,7 +7,7 @@ function loadLedger(text) {
   const segment = (a, b) => text.slice(text.indexOf(`function ${a}(`), text.indexOf(`function ${b}(`));
   const context = { Date: class extends Date { constructor(...args) { super(...(args.length ? args : ['2026-10-22T12:00:00Z'])); } } };
   vm.createContext(context);
-  vm.runInContext(segment('normalizePhone', 'phoneToEmail') + segment('getCurrentMonth', 'formatMonth') + segment('monthRange', 'normalizeList') + segment('toMoney', 'getMonthPaymentInfo'), context);
+  vm.runInContext(segment('normalizePhone', 'getLoginEmailCandidates') + segment('getCurrentMonth', 'formatMonth') + segment('monthRange', 'normalizeList') + segment('toMoney', 'getMonthPaymentInfo'), context);
   return context;
 }
 const current = loadLedger(source);
@@ -53,3 +53,18 @@ for(const [p,f] of [[{...payments[4],id:'different'},flat],[payments[4],{...flat
 assert.equal(current.getEffectivePaymentAmount(paymentsFor('201')[2],{flatNo:'201'},{rateHistory}),5000);
 console.log('PASS: reproduced production loss; 403 due 900 -> 0, advance 200; ordering, cash conservation and 201/203/402 regressions');
 console.table(after.entries.map(({month,charge,paid,due})=>({month,charge,paid,due})));
+// Role/society/flat access helpers remain compatible for Manager and Resident.
+const accessSource = source.slice(source.indexOf('function normalizeRole('), source.indexOf('function toMoney('));
+const access = { roles:{SUPER_ADMIN:'super_admin',MANAGER:'manager',RESIDENT:'resident'} };
+vm.createContext(access);
+vm.runInContext(source.slice(source.indexOf('function normalizePhone('),source.indexOf('function getLoginEmailCandidates('))+accessSource,access);
+assert.equal(access.canAccessSociety({role:'manager',societyIds:{default_society:true}},'default_society'),true);
+assert.equal(access.canAccessSociety({role:'manager',societyIds:{other:true}},'default_society'),false);
+assert.equal(access.isFlatLinkedToUser({id:'403',residentUid:'resident403'},{role:'resident'},{uid:'resident403'},'default_society'),true);
+assert.equal(access.isFlatLinkedToUser({id:'201',residentUid:'resident201'},{role:'resident'},{uid:'resident403'},'default_society'),false);
+console.log('PASS: Manager assigned-society and Resident linked-flat access');
+assert.equal(current.isValidPaymentDate('2026-10-06'),true);
+assert.equal(current.isValidPaymentDate('2026-31-31'),false);
+assert.equal(current.isValidPaymentDate('2026-02-30'),false);
+assert.equal(current.isValidPaymentDate('2028-02-29'),true);
+console.log('PASS: editable mobile date accepts real ISO dates and rejects malformed new entries');

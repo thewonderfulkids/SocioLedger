@@ -23,3 +23,10 @@ dist-ssr
 *.sln
 *.sw?
 serviceAccountKey.json
+# Local credentials must never be tracked
+.env
+.env.*
+!.env.example
+*service-account*.json
+*serviceAccount*.json
+Password
