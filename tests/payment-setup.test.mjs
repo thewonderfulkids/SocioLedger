@@ -74,3 +74,19 @@ test('API writes only receiving configuration, retaining revision and public mas
  assert.equal(state.revision,2);assert.equal(state.payments,undefined);assert.equal(state.expenses,undefined);
  assert.ok(!JSON.stringify(saved.body).includes('1234567890'));
 });
+test('API boots under Vercel module restrictions and stays closed without activation',async()=>{
+ const {execFileSync}=await import('node:child_process');
+ const output=execFileSync(process.execPath,['--no-experimental-require-module','--input-type=module','-e',`import handler from './api/payment-setup.js';const res={setHeader(){},status(n){this.n=n;return this},json(){console.log(this.n)}};await handler({method:'GET',headers:{},query:{}},res);`],{encoding:'utf8',env:{...process.env,PAYMENT_SETUP_RULES_VERIFIED:'false'}});
+ assert.equal(output.trim(),'503');
+});
+test('JWKS compatibility pin preserves RSA public-key conversion and signature rejection',async()=>{
+ const {generateKeyPairSync,sign,verify}=await import('node:crypto');
+ const {default:jwksRsa}=await import('jwks-rsa');
+ const {publicKey,privateKey}=generateKeyPairSync('rsa',{modulusLength:2048});
+ const jwk={...publicKey.export({format:'jwk'}),kid:'unit-test-key',alg:'RS256',use:'sig'};
+ const client=new jwksRsa.JwksClient({jwksUri:'https://invalid.example/jwks',getKeysInterceptor:async()=>[jwk]});
+ const key=await client.getSigningKey('unit-test-key');
+ const payload=Buffer.from('test payload');const signature=sign('RSA-SHA256',payload,privateKey);
+ assert.equal(verify('RSA-SHA256',payload,key.getPublicKey(),signature),true);
+ assert.equal(verify('RSA-SHA256',Buffer.from('changed payload'),key.getPublicKey(),signature),false);
+});
