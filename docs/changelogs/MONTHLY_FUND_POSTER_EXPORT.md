@@ -1,0 +1,9 @@
+# Monthly fund poster exports
+
+Monthly Reports now offers a Hindi resident poster, PNG/PDF downloads and a file-share button for managers and super admins. The poster contains opening fund, combined receipts (maintenance and facility contributions), expense categories, closing fund, reconciliation and separately labelled current outstanding dues. No resident names or phone numbers are included. Share opens the device share sheet; selecting a recipient and sending remain with the user. Unsupported devices download a PNG for manual attachment.
+
+The previous report selected payments by receipt date OR maintenance month. An advance or late receipt could therefore appear in two monthly reports. Monthly Reports, CSV and WhatsApp text now all use one receipt-date cash basis. Maintenance allocation/status and stored financial records are unchanged. Existing imported balances remain included, consistent with the dashboard. Invalid legacy payment dates use the existing normalized assigned month exactly once and are disclosed in the export. Unclassifiable dates/amounts block image/PDF export. Cards settled after unpaid issuance use the settlement timestamp.
+
+Opening and closing use cumulative active records through the selected month. Current unpaid maintenance/card dues are never cash and are explicitly labelled current, not a historical arrears snapshot. CSV retains itemized expense details; the poster groups expenses by their stored category. Generation waits for the relevant society's successful data reads. No new permissions, Firebase writes, migrations, authentication changes, or external image services were introduced.
+
+Validation: receipt-date partition/conservation tests, consecutive opening/closing, advance and late receipts, legacy date fallback, unpaid/settled cards, category totals, future exclusions, PDF image/xref integrity; existing ledger/access/payment tests; lint and production build.

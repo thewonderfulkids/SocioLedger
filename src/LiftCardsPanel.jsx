@@ -35,6 +35,8 @@ export default function LiftCardsPanel({ db, societyId, flats, incomes, user, ui
     const mode=String(answer).trim();
     if(!['Cash','UPI','Bank Transfer'].includes(mode))return setMessage('Use Cash, UPI, or Bank Transfer as payment mode.');
     try {
+      // Event handler: settlement time is captured only after the user marks a card paid.
+      // eslint-disable-next-line react-hooks/purity
       await update(ref(db,`societies/${societyId}/otherIncome/${record.id}`),{paymentStatus:'paid',mode,paidAt:Date.now(),paidBy:user?.name||uid,paidByUid:uid});
       setMessage(`₹${record.amount} card due for Flat ${record.flatNo} marked paid.`);
     } catch(e) { setMessage(e.message||'Could not mark card due paid.'); }

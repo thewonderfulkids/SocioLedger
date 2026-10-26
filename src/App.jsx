@@ -3,6 +3,8 @@ import { incomeTotal } from "./lift-cards.js";
 import PaymentSetupPanel from "./PaymentSetupPanel.jsx";
 import { paymentSetupRequest } from "./payment-setup-client.js";
 import { buildYearlyAuditRows, serializeCSV } from "./audit.js";
+import { buildMonthlyFundReport } from "./monthly-report.js";
+import MonthlyReportExport from "./MonthlyReportExport.jsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ref, onValue, set, push, update, remove, get } from "firebase/database";
 import { db } from "./firebase";
@@ -948,6 +950,10 @@ export default function App() {
   });
 
   const [incomeAccess, setIncomeAccess] = useState(null);
+  const [reportAccess, setReportAccess] = useState(null);
+  const reportLoadError = reportAccess?.societyId === selectedSocietyId
+    ? (Object.values(reportAccess.errors || {}).find(Boolean) || (['flats', 'rates', 'payments', 'expenses'].every(key => reportAccess.loaded?.[key]) ? '' : 'Loading report records…'))
+    : 'Loading report records…';
   const incomeLoadError = incomeAccess?.societyId === selectedSocietyId ? incomeAccess.error : "Loading other income…";
   const [secureReceiver, setSecureReceiver] = useState(null);
   const [societyForm, setSocietyForm] = useState({
@@ -1142,6 +1148,10 @@ useEffect(() => {
   }
 
   const basePath = societyPath(selectedSocietyId);
+  const reportLoaded = (key, error = '') => setReportAccess(previous => {
+    const state = previous?.societyId === selectedSocietyId ? previous : { societyId: selectedSocietyId, loaded: {}, errors: {} };
+    return { ...state, loaded: { ...state.loaded, [key]: !error }, errors: { ...state.errors, [key]: error } };
+  });
 
   const unsubFlats = onValue(ref(db, `${basePath}/flats`), (snapshot) => {
     let flats = normalizeList(snapshot.val() || []).sort((a, b) =>
@@ -1154,7 +1164,8 @@ useEffect(() => {
       ...prev,
       flats,
     }));
-  });
+    reportLoaded('flats');
+  }, () => reportLoaded('flats', 'Flats could not be loaded. Report export is unavailable.'));
 
   const unsubRates = onValue(ref(db, `${basePath}/rateHistory`), (snapshot) => {
     const rateHistory = normalizeList(snapshot.val() || []).sort((a, b) =>
@@ -1165,7 +1176,8 @@ useEffect(() => {
       ...prev,
       rateHistory,
     }));
-  });
+    reportLoaded('rates');
+  }, () => reportLoaded('rates', 'Rates could not be loaded. Report export is unavailable.'));
 
   const unsubPayments = onValue(ref(db, `${basePath}/payments`), (snapshot) => {
     let payments = normalizeList(snapshot.val() || []).sort(
@@ -1176,7 +1188,8 @@ useEffect(() => {
       ...prev,
       payments,
     }));
-  });
+    reportLoaded('payments');
+  }, () => reportLoaded('payments', 'Payments could not be loaded. Report export is unavailable.'));
 
   const unsubExpenses = onValue(ref(db, `${basePath}/expenses`), (snapshot) => {
     const expenses = normalizeList(snapshot.val() || []).sort(
@@ -1187,7 +1200,8 @@ useEffect(() => {
       ...prev,
       expenses,
     }));
-  });
+    reportLoaded('expenses');
+  }, () => reportLoaded('expenses', 'Expenses could not be loaded. Report export is unavailable.'));
 
   const unsubIncome = onValue(ref(db, `${basePath}/otherIncome`), snapshot => {
     setData(prev => ({...prev, otherIncome:normalizeList(snapshot.val() || []).sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0))}));
@@ -1397,39 +1411,12 @@ useEffect(() => {
     openTab("expenses");
   }
 
-  const monthlyReport = useMemo(() => {
-    const monthPayments = societyData.payments.filter((p) => getPaymentMonth(p) === reportMonth || String(p.date || p.paymentDate || "").startsWith(reportMonth));
-    const monthExpenses = societyData.expenses.filter((e) => String(e.date || "").startsWith(reportMonth));
-
-    const monthIncome = societyData.otherIncome.filter(item=>String(item.date||"").startsWith(reportMonth));
-    const collected = monthPayments.reduce((sum, p) => sum + getPaymentAmount(p), 0);
-    const expenses = monthExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-
-    const categoryTotals = monthExpenses.reduce((acc, expense) => {
-      const key = expense.category || "General";
-      acc[key] = (acc[key] || 0) + Number(expense.amount || 0);
-      return acc;
-    }, {});
-
-    const modeTotals = monthPayments.reduce((acc, payment) => {
-      const key = payment.mode || "Other";
-      acc[key] = (acc[key] || 0) + getPaymentAmount(payment);
-      return acc;
-    }, {});
-
-    return {
-      month: reportMonth,
-      payments: monthPayments,
-      expenses: monthExpenses,
-      collected,
-      expenseTotal: expenses,
-      otherIncome: monthIncome,
-      incomeTotal: incomeTotal(monthIncome),
-      net: collected + incomeTotal(monthIncome) - expenses,
-      categoryTotals,
-      modeTotals,
-    };
-  }, [societyData.payments, societyData.expenses, societyData.otherIncome, reportMonth]);
+  const monthlyReport = useMemo(() => buildMonthlyFundReport({
+    month: reportMonth, payments: societyData.payments, expenses: societyData.expenses,
+    otherIncome: societyData.otherIncome, getPaymentMonth, getPaymentAmount,
+  }), [societyData.payments, societyData.expenses, societyData.otherIncome, reportMonth]);
+  const currentCardDues = societyData.otherIncome.filter(item => item.paymentStatus === "unpaid")
+    .reduce((total, item) => total + Number(item.amount || 0), 0);
 
   const monthlyStatus = useMemo(() => {
     const rows = activeFlats.map((flat) => {
@@ -2265,15 +2252,16 @@ async function saveFlat() {
 
   function getWhatsAppSummaryLink() {
     const message = encodeURIComponent(
-      `SocioLedger Monthly Summary\n\n` +
-        `Month: ${formatMonth(monthlyReport.month)}\n` +
-        `Collection: ${rupee(monthlyReport.collected)}\n` +
-        `Other Income: ${incomeLoadError ? "Unavailable" : rupee(monthlyReport.incomeTotal)}\n` +
-        `Expense: ${rupee(monthlyReport.expenseTotal)}\n` +
-        `Net Balance: ${incomeLoadError ? "Unavailable" : rupee(monthlyReport.net)}\n\n` +
-        `Generated from SocioLedger.`
+      `${data.societies.find(s => s.id === selectedSocietyId)?.name || "SocioLedger"} Monthly Fund Summary\n\n` +
+      `Month: ${formatMonth(monthlyReport.month)}\nReceipt-date basis\n` +
+      `Opening: ${rupee(monthlyReport.opening)}\n` +
+      `Total received (maintenance + facility contributions): ${rupee(monthlyReport.totalReceipts)}\n` +
+      `Expense: ${rupee(monthlyReport.expenseTotal)}\n` +
+      `Closing: ${rupee(monthlyReport.closing)}\n` +
+      `Current unpaid dues (excluded): ${rupee(dashboard.totalDue + currentCardDues)}\n` +
+      (monthlyReport.fallbackCount ? `Legacy receipts with invalid/missing dates use their assigned month once.\n` : "") +
+      `Generated from SocioLedger.`
     );
-
     return `https://wa.me/?text=${message}`;
   }
 
@@ -2288,22 +2276,28 @@ async function saveFlat() {
   }
 
   function exportReportCSV() {
-    if (incomeLoadError) return alert(incomeLoadError);
+    if (incomeLoadError || reportLoadError || monthlyReport.errors.length) return alert(incomeLoadError || reportLoadError || monthlyReport.errors.join(" "));
     const rows = [
       ["SocioLedger Monthly Report"],
       ["Month", formatMonth(monthlyReport.month)],
+      ["Basis", "Receipt date; invalid legacy receipt dates use the assigned month once"],
+      ["Legacy date fallbacks", monthlyReport.fallbackCount],
       [],
       ["Summary"],
-      ["Collection", monthlyReport.collected],
-      ["Other Income", monthlyReport.incomeTotal],
+      ["Opening Fund", monthlyReport.opening],
+      ["Maintenance Receipts", monthlyReport.collected],
+      ["Facility Contributions", monthlyReport.incomeTotal],
+      ["Total Received", monthlyReport.totalReceipts],
       ["Expense", monthlyReport.expenseTotal],
-      ["Net Balance", monthlyReport.net],
+      ["Month Surplus / Deficit", monthlyReport.net],
+      ["Closing Available Fund", monthlyReport.closing],
+      ["Current Outstanding (excluded from cash)", dashboard.totalDue + currentCardDues],
       [],
       ["Payments"],
       ["Date", "Flat", "Amount", "Mode", "Note"],
       ...monthlyReport.payments.map((p) => {
         const flat = societyData.flats.find((f) => f.id === p.flatId);
-        return [p.date, flat?.flatNo || "-", p.amount, p.mode, p.note || "-"];
+        return [p.date || p.paymentDate, flat?.flatNo || "-", getPaymentAmount(p), p.mode, p.note || "-"];
       }),
       [],
       ["Other Income"],
@@ -3353,22 +3347,28 @@ async function saveFlat() {
             <div className="pageHeader">
               <div>
                 <h1>Monthly Reports</h1>
-                <p>Month-wise collection, expense and net balance summary.</p>
+                <p>Receipt-date fund summary. Maintenance allocation and unpaid dues stay separate.</p>
               </div>
             </div>
 
             <div className="formGrid">
-              <input type="month" value={reportMonth} onChange={(e) => setReportMonth(e.target.value)} />
-              <button onClick={exportReportCSV}>Export CSV</button>
-              <a href={getWhatsAppSummaryLink()} target="_blank" rel="noreferrer" className="reportLink">WhatsApp Summary</a>
+              <input aria-label="Report month" type="month" value={reportMonth} onChange={(e) => { if (/^\d{4}-(0[1-9]|1[0-2])$/.test(e.target.value)) setReportMonth(e.target.value); }} />
+              <button onClick={exportReportCSV} disabled={!!incomeLoadError || !!reportLoadError || !!monthlyReport.errors.length}>Export CSV</button>
+              {!incomeLoadError && !reportLoadError && !monthlyReport.errors.length && <a href={getWhatsAppSummaryLink()} target="_blank" rel="noreferrer" className="reportLink">WhatsApp Text Summary</a>}
             </div>
 
+            {reportLoadError && <p role="alert">{reportLoadError}</p>}
             <div className="cards">
-              <div className="card success"><span>Month Collection</span><b>{rupee(monthlyReport.collected)}</b></div>
-              <div className="card success"><span>Other Income</span><b>{incomeLoadError ? "Unavailable" : rupee(monthlyReport.incomeTotal)}</b></div>
-              <div className="card danger"><span>Month Expense</span><b>{rupee(monthlyReport.expenseTotal)}</b></div>
-              <div className={monthlyReport.net >= 0 ? "card success" : "card danger"}><span>Month Net Balance</span><b>{incomeLoadError ? "Unavailable" : rupee(monthlyReport.net)}</b></div>
+              <div className="card"><span>Opening Fund</span><b>{incomeLoadError || reportLoadError ? "Unavailable" : rupee(monthlyReport.opening)}</b></div>
+              <div className="card success"><span>Total Received</span><b>{incomeLoadError || reportLoadError ? "Unavailable" : rupee(monthlyReport.totalReceipts)}</b></div>
+              <div className="card danger"><span>Month Expense</span><b>{reportLoadError ? "Unavailable" : rupee(monthlyReport.expenseTotal)}</b></div>
+              <div className={monthlyReport.closing >= 0 ? "card success" : "card danger"}><span>Closing Available Fund</span><b>{incomeLoadError || reportLoadError ? "Unavailable" : rupee(monthlyReport.closing)}</b></div>
             </div>
+            <p>Maintenance receipts: {rupee(monthlyReport.collected)} · Facility contributions received: {incomeLoadError ? "Unavailable" : rupee(monthlyReport.incomeTotal)} · Month surplus / deficit: {incomeLoadError ? "Unavailable" : rupee(monthlyReport.net)}</p>
+            {canManage() && <MonthlyReportExport key={`${selectedSocietyId}-${reportMonth}`} report={monthlyReport}
+              societyName={data.societies.find(s => s.id === selectedSocietyId)?.name || "SocioLedger"}
+              outstanding={dashboard.totalDue + currentCardDues} loadError={incomeLoadError || reportLoadError} />}
+
           </>
         )}
 

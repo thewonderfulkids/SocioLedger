@@ -5439,3 +5439,11 @@ body:has(.neoLoginPage) #root {
 .paymentModeChoices label,.receiverConfirmation { display: flex; align-items: flex-start; gap: 10px; line-height: 1.6; }
 .paymentModeChoices input,.receiverConfirmation input { width: auto; margin-top: 5px; }
 .receiverFields>label:not(.receiverConfirmation) { display: grid; gap: 7px; }
+
+/* Monthly report export keeps the resident poster independent of app theme. */
+.monthlyExport { margin-top: 24px; padding: 24px; background: var(--card); border: 1px solid var(--border); border-radius: 20px; }
+.monthlyExport h2 { margin: 0 0 8px; }
+.monthlyExportActions { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 12px; }
+.monthlyExportHint { color: var(--muted); max-width: 760px; line-height: 1.6; }
+.monthlyPosterPreview { display: block; width: 100%; max-width: 650px; height: auto; margin: 24px auto 0; border: 1px solid #dce5ed; border-radius: 12px; box-shadow: 0 12px 36px #102e5415; }
+@media (max-width: 600px) { .monthlyExport { padding: 16px; } .monthlyExportActions > button { flex: 1 1 44%; white-space: normal; min-height: 44px; } }
