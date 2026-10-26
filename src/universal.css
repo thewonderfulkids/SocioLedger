@@ -1,0 +1,264 @@
+/* SocioLedger universal formatting layer
+   Loaded after App.css to normalize shared screens without changing ledger logic. */
+
+:root {
+  --ui-radius: 18px;
+  --ui-radius-sm: 12px;
+  --ui-gap: 16px;
+  --ui-control-h: 44px;
+}
+
+html { -webkit-text-size-adjust: 100%; }
+body { line-height: 1.45; }
+
+.app .main { min-width: 0; }
+.app .main > * { min-width: 0; }
+
+/* Universal headings and sections */
+.app .pageHeader,
+.app .ledgerHeader,
+.app .settingsCard,
+.app .managerSocietyBox,
+.app .formGrid,
+.app .emptyState,
+.app .paymentPreview,
+.app .paymentSetupNotice {
+  width: 100%;
+  max-width: 100%;
+}
+
+.app .pageHeader h1,
+.app .ledgerHeader h2,
+.app .settingsCard h2,
+.app .settingsCard h3,
+.app .managerSocietyBox h3,
+.app .sectionTitleRow h2 {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.app .pageHeader p,
+.app .ledgerHeader p,
+.app .settingsCard p,
+.app .managerSocietyBox p,
+.app .paymentSetupNotice,
+.app .hintText,
+.app .mutedText {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+/* Universal form controls */
+.app .main input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.app .main select,
+.app .main textarea {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: var(--ui-control-h);
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--surface, var(--card));
+  color: var(--text);
+  font: inherit;
+}
+
+.app .main textarea { resize: vertical; min-height: 92px; }
+.app .main label { min-width: 0; }
+.app .main fieldset { max-width: 100%; }
+
+.app .receiverFields,
+.app .paymentModeChoices {
+  width: 100%;
+  min-width: 0;
+}
+
+.app .receiverFields > label:not(.receiverConfirmation) {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* Consistent buttons while preserving semantic variants */
+.app .main button,
+.app .main .reportLink,
+.app .main .ledgerHeader a {
+  min-height: 40px;
+  max-width: 100%;
+  border-radius: 12px;
+  font-weight: 700;
+}
+
+.app .main button:not(.iconBtn):not(.smallBtn) {
+  padding-inline: 14px;
+}
+
+/* Cards use one spacing/radius system */
+.app .cards { align-items: stretch; }
+.app .card { height: 100%; }
+.app .settingsCard,
+.app .managerSocietyBox,
+.app .chartCard,
+.app .ledgerHeader,
+.app .emptyState {
+  border-radius: var(--ui-radius);
+}
+
+/* Tables: desktop keeps full data; smaller screens scroll instead of crushing columns. */
+.app .tableWrap,
+.app .statusTableWrap,
+.app .expenseTableWrap,
+.app .mobileCardTable {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.app .tableWrap table,
+.app .statusTableWrap table,
+.app .expenseTableWrap table,
+.app .mobileCardTable table {
+  width: 100%;
+  table-layout: auto;
+}
+
+.app th { vertical-align: middle; }
+.app td { vertical-align: middle; }
+.app th,
+.app td { font-variant-numeric: tabular-nums; }
+
+/* Undo old nth-child formatting leaking into unrelated tables. */
+.app .tableWrap td {
+  max-width: none;
+  word-break: normal;
+}
+.app .tableWrap td:nth-child(2),
+.app .tableWrap td:nth-child(4),
+.app .tableWrap td:nth-child(5),
+.app .tableWrap td:nth-child(6) {
+  max-width: none;
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+/* Long text cells can opt into wrapping naturally. */
+.app .tableWrap td:last-child { overflow-wrap: anywhere; }
+
+/* Dark mode: every generic surface follows theme tokens. */
+.app.dark .pageHeader,
+.app.dark .settingsCard,
+.app.dark .managerSocietyBox,
+.app.dark .formGrid,
+.app.dark .ledgerHeader,
+.app.dark .emptyState,
+.app.dark .paymentSetupNotice,
+.app.dark .paymentPreview {
+  color: var(--text);
+  background-color: var(--card);
+  border-color: var(--border);
+}
+
+.app.dark .settingsCard p,
+.app.dark .paymentSetupNotice,
+.app.dark .receiverFields > label:not(.receiverConfirmation) {
+  color: var(--text);
+}
+
+/* Tablet/mobile universal behavior */
+@media (max-width: 900px) {
+  .app .main { width: 100%; padding: 14px !important; }
+  .app .pageHeader { gap: 10px; }
+  .app .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .app .formGrid { grid-template-columns: 1fr; }
+  .app .settingsGrid,
+  .app .profileGrid,
+  .app .chartGrid { grid-template-columns: 1fr; }
+
+  /* Do not hide arbitrary columns globally: all data remains reachable by horizontal scroll. */
+  .app .tableWrap,
+  .app .mobileCardTable,
+  .app .statusTableWrap,
+  .app .expenseTableWrap {
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+  }
+
+  .app .tableWrap table,
+  .app .mobileCardTable table,
+  .app .statusTableWrap table,
+  .app .expenseTableWrap table {
+    min-width: 760px !important;
+    width: max-content !important;
+    table-layout: auto !important;
+  }
+
+  .app .statusTableWrap th,
+  .app .statusTableWrap td,
+  .app .expenseTableWrap th,
+  .app .expenseTableWrap td,
+  .app .mobileCardTable th,
+  .app .mobileCardTable td,
+  .app .tableWrap th,
+  .app .tableWrap td {
+    display: table-cell !important;
+    width: auto !important;
+    min-width: 0 !important;
+    padding: 10px 11px !important;
+    font-size: 12px !important;
+    line-height: 1.3 !important;
+    white-space: nowrap !important;
+  }
+
+  .app .statusTableWrap th,
+  .app .statusTableWrap td,
+  .app .expenseTableWrap th,
+  .app .expenseTableWrap td {
+    display: table-cell !important;
+  }
+
+  .app .statusTableWrap .status,
+  .app .statusTableWrap .payBtn,
+  .app .statusTableWrap .smallBtn {
+    width: auto !important;
+    min-width: max-content !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .app .main { padding: 10px !important; }
+  .app .pageHeader { padding: 14px !important; border-radius: 16px !important; }
+  .app .pageHeader h1 { font-size: 22px !important; }
+  .app .pageHeader p { font-size: 13px !important; }
+
+  .app .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .app .card { min-width: 0; padding: 13px; }
+  .app .card span { min-height: 0; overflow-wrap: anywhere; }
+  .app .card b { font-size: 18px; overflow-wrap: anywhere; }
+
+  .app .settingsCard,
+  .app .managerSocietyBox,
+  .app .formGrid,
+  .app .ledgerHeader,
+  .app .emptyState { padding: 14px; border-radius: 16px; }
+
+  .app .settingsActions,
+  .app .ledgerActions { width: 100%; }
+  .app .settingsActions > button,
+  .app .ledgerActions > button,
+  .app .ledgerActions > a { flex: 1 1 auto; }
+
+  .app .tableWrap table,
+  .app .mobileCardTable table,
+  .app .statusTableWrap table,
+  .app .expenseTableWrap table { min-width: 700px !important; }
+}
+
+@media (max-width: 360px) {
+  .app .cards { grid-template-columns: 1fr; }
+}
