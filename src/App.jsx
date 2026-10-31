@@ -1,5 +1,5 @@
 import LiftCardsPanel from "./LiftCardsPanel.jsx";
-import { incomeTotal } from "./lift-cards.js";
+import { incomeTotal, withFacilityDues } from "./lift-cards.js";
 import PaymentSetupPanel from "./PaymentSetupPanel.jsx";
 import { paymentSetupRequest } from "./payment-setup-client.js";
 import { buildYearlyAuditRows, serializeCSV } from "./audit.js";
@@ -1421,7 +1421,7 @@ useEffect(() => {
   const monthlyStatus = useMemo(() => {
     const rows = activeFlats.map((flat) => {
       const info = getMonthPaymentInfo(flat, societyData, statusMonth);
-      return { flat, ...info };
+      return { flat, ...withFacilityDues(info, societyData.otherIncome, flat) };
     });
 
     return {
@@ -1437,6 +1437,7 @@ useEffect(() => {
       totalAdvanceAdjusted: rows.reduce((sum, r) => sum + Number(r.advanceAdjusted || 0), 0),
       totalAdvance: rows.reduce((sum, r) => sum + Number(r.advance || 0), 0),
       totalNetPayable: rows.reduce((sum, r) => sum + Number(r.netPayable || 0), 0),
+      totalFacilityDue: rows.reduce((sum, r) => sum + r.facilityDue, 0),
     };
   }, [activeFlats, societyData, statusMonth]);
 
@@ -2313,11 +2314,13 @@ async function saveFlat() {
   }
 
   function exportStatusCSV() {
+    if (incomeLoadError) return alert(incomeLoadError);
     const rows = [
       ["SocioLedger Month-wise Payment Status"],
       ["Month", formatMonth(monthlyStatus.month)],
       [],
-      ["Flat", "Resident", "Phone", "Month Charge", "Paid Adjusted", "Month Due", "Gross Total Due", "Advance Adjusted", "Remaining Advance", "Net Payable", "Status"],
+      ["Basis", "Maintenance as of selected month; facility charges are current unpaid charges. Maintenance advance is not applied to facility charges."],
+      ["Flat", "Resident", "Phone", "Month Charge", "Paid Adjusted", "Month Due", "Maintenance Total Due", "Advance Adjusted", "Remaining Advance", "Current Facility Charges Due", "Net Payable", "Maintenance Status"],
       ...monthlyStatus.rows.map((row) => [
         row.flat.flatNo,
         row.flat.ownerName,
@@ -2328,6 +2331,7 @@ async function saveFlat() {
         row.totalDue,
         row.advanceAdjusted,
         row.advance,
+        row.facilityDue,
         row.netPayable,
         row.status,
       ]),
@@ -3141,7 +3145,7 @@ async function saveFlat() {
 
             <div className="formGrid">
               <input type="month" value={statusMonth} onChange={(e) => setStatusMonth(e.target.value)} />
-              {canManage() && <button onClick={exportStatusCSV}>Export Status CSV</button>}
+              {canManage() && <button onClick={exportStatusCSV} disabled={!!incomeLoadError}>Export Status CSV</button>}
             </div>
 
             <div className="cards">
@@ -3150,17 +3154,21 @@ async function saveFlat() {
               <div className="card danger"><span>Pending Flats</span><b>{monthlyStatus.pendingCount}</b></div>
               <div className="card"><span>Month Collection Adjusted</span><b>{rupee(monthlyStatus.totalPaid)}</b></div>
               <div className="card danger"><span>Month Due</span><b>{rupee(monthlyStatus.totalMonthDue)}</b></div>
-              <div className="card danger"><span>Gross Total Due</span><b>{rupee(monthlyStatus.totalAllDue)}</b></div>
+              <div className="card danger"><span>Maintenance Total Due</span><b>{rupee(monthlyStatus.totalAllDue)}</b></div>
               <div className="card success"><span>Advance Adjusted</span><b>{rupee(monthlyStatus.totalAdvanceAdjusted)}</b></div>
               <div className="card success"><span>Remaining Advance</span><b>{rupee(monthlyStatus.totalAdvance)}</b></div>
-              <div className="card warning"><span>Net Payable</span><b>{rupee(monthlyStatus.totalNetPayable)}</b></div>
+              <div className="card danger"><span>Current Facility Charges Due</span><b>{incomeLoadError ? "Unavailable" : rupee(monthlyStatus.totalFacilityDue)}</b></div>
+              <div className="card warning"><span>Net Payable</span><b>{incomeLoadError ? "Unavailable" : rupee(monthlyStatus.totalNetPayable)}</b></div>
             </div>
+
+            <p>Net Payable includes maintenance dues plus current unpaid facility / lift-access card charges. Month status refers to maintenance only. Remaining maintenance advance does not automatically settle facility charges.</p>
+            {incomeLoadError && <p role="alert">{incomeLoadError} Combined payable is unavailable until facility records load.</p>}
 
             <div className="tableWrap">
               <table>
                 <thead>
                   <tr>
-                    <th>Flat</th><th>Resident</th><th>Month Charge</th><th>Paid Adjusted</th><th>Month Due</th><th>Gross Total Due</th><th>Advance Adjusted</th><th>Remaining Advance</th><th>Net Payable</th><th>Status</th><th>Pay</th>
+                    <th>Flat</th><th>Resident</th><th>Month Charge</th><th>Paid Adjusted</th><th>Month Due</th><th>Maintenance Total Due</th><th>Advance Adjusted</th><th>Remaining Advance</th><th>Current Facility Charges Due</th><th>Net Payable</th><th>Maintenance Status</th><th>Pay Maintenance</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -3174,14 +3182,15 @@ async function saveFlat() {
                       <td>{rupee(row.totalDue)}</td>
                       <td>{rupee(row.advanceAdjusted)}</td>
                       <td>{rupee(row.advance)}</td>
-                      <td>{rupee(row.netPayable)}</td>
+                      <td>{incomeLoadError ? "Unavailable" : row.facilityDue > 0 ? <span className="status pending">{rupee(row.facilityDue)} pending</span> : rupee(0)}</td>
+                      <td>{incomeLoadError ? "Unavailable" : rupee(row.netPayable)}</td>
                       <td>
                         <span className={row.status === "Paid" ? "status paid" : row.status === "Partial" ? "status partial" : "status pending"}>
                           {row.status}
                         </span>
                       </td>
                       <td>
-                        {canShowPayButton(row.flat) && row.netPayable > 0 ? (
+                        {canShowPayButton(row.flat) && row.maintenanceNetPayable > 0 ? (
                           <button className="payBtn smallBtn" onClick={() => openPaymentForFlat(row.flat.id)}>Pay</button>
                         ) : (
                           <span className="mutedText">-</span>

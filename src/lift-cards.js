@@ -16,6 +16,13 @@ export function liftCardDueForFlat(incomes = [], flat = {}) {
   }, 0);
 }
 
+// Display-only aggregation. Maintenance advance never pays card charges implicitly.
+export function withFacilityDues(maintenance, incomes, flat) {
+  const facilityDue = liftCardDueForFlat(incomes, flat);
+  const maintenanceNetPayable = Number(maintenance.netPayable || 0);
+  return { ...maintenance, maintenanceNetPayable, facilityDue, netPayable: maintenanceNetPayable + facilityDue };
+}
+
 export function createLiftCardIncome(form, flats, { id, uid, name, now }) {
   const flat = flats.find(item => item.id === form.flatId);
   if (!flat) throw new Error('Select a valid flat.');

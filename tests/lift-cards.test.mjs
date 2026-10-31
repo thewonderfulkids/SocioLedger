@@ -30,3 +30,14 @@ test('card receipt cannot change any maintenance ledger including Flat 201 and 4
   assert.equal(JSON.stringify(ctx.buildLedger(flat,{...data,otherIncome:[createLiftCardIncome(form,flats,context)]},'2026-10')),before);
  }
 });
+
+test('payment status combined payable includes only that flat’s unpaid cards, without consuming maintenance advance', async()=>{
+ const {withFacilityDues}=await import('../src/lift-cards.js');
+ const incomes=[{type:'lift_card',flatId:'403',flatNo:'403',amount:400,paymentStatus:'unpaid'},{type:'lift_card',flatId:'402',flatNo:'402',amount:200,paymentStatus:'unpaid'},{type:'lift_card',flatId:'403',amount:400,paymentStatus:'paid'}];
+ const maintenance={netPayable:0,totalDue:0,due:0,advance:200,status:'Paid'};
+ const result=withFacilityDues(maintenance,incomes,{id:'403',flatNo:'403'});
+ assert.equal(result.netPayable,400);assert.equal(result.facilityDue,400);assert.equal(result.maintenanceNetPayable,0);assert.equal(result.advance,200);assert.equal(result.status,'Paid');assert.equal(maintenance.netPayable,0);
+ assert.equal(withFacilityDues({...maintenance,netPayable:800},incomes,{id:'402',flatNo:'402'}).netPayable,1000);
+ assert.equal(withFacilityDues(maintenance,incomes.map(r=>({...r,paymentStatus:'paid'})),{id:'403',flatNo:'403'}).netPayable,0);
+ assert.equal(withFacilityDues({...maintenance,netPayable:1600},incomes,{id:'101',flatNo:'101'}).netPayable,1600);
+});
